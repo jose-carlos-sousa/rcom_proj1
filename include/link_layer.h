@@ -7,7 +7,15 @@
 #define ADDRESS_R (0x01)
 #define CONTROL_UA (0x07)
 #define CONTROL_SET (0x03)
+#define CONTROL_RR0 (0xAA)
+#define CONTROL_RR1 (0xAB)
+#define CONTROL_REJ0 (0x54)
+#define CONTROL_REJ1 (0x55)
+#define CONTROL_DISC (0x0B)
 #define FLAG (0x7E)
+#define ESCAPE 0x7D
+#define MOD_FLAG 0x5e
+#define MOD_ESCAPE 0x5d
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -33,6 +41,7 @@ typedef struct
     int timeout;
 } LinkLayer;
 
+typedef enum {START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, STOP_STATE, READING_DATA, DATA_FOUND_ESC} State;
 // SIZE of maximum acceptable payload.
 // Maximum number of bytes that application layer should send to link layer
 #define MAX_PAYLOAD_SIZE 1000
