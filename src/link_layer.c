@@ -136,7 +136,7 @@ int checkCF(){
     printf("inicio \n");
     while(state != STOP_STATE && !alarmEnabled){
         //printf("LOPPPI\n");
-        if ( readByte(c) >0) {
+        if ( readByte(&c) >0) {
             printf("Checking frame\n");
             switch (state) {
                 case (START):
@@ -190,7 +190,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     infoFrame[0] = FLAG;
     infoFrame[1] = ADDRESS_T;
     infoFrame[2] = ns << 6;
-    infoFrame[3] = infoFrame[0] ^ infoFrame[2];
+    infoFrame[3] = infoFrame[1] ^ infoFrame[2];
     int index = 4;
     unsigned char bcc2 = 0;
 
@@ -260,54 +260,90 @@ int llwrite(const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 {
-    unsigned char c, control =0;
+    unsigned char c, control = 0;
     int i = 0;
     State state = START;
     unsigned char buf[5] = {0};
-    printf("vou ler yayay\n");
+
+    printf("Starting llread...\n");
+
     while (state != STOP_STATE) {  
-        char k = readByte(c);
-        printf("k ois %x",k);
-        if (k > 0) {
-            printf(" estou a ler a ceena %d\n",c);
+        if (readByte(&c) > 0) {
+            printf("Read byte: %x\n", c);
             switch (state) {
                 case START:
-                    if (c == FLAG) state = FLAG_RCV;
+                    printf("State: START\n");
+                    if (c == FLAG) {
+                        state = FLAG_RCV;
+                        printf("Transition to FLAG_RCV\n");
+                    } else {
+                        printf("Received byte is not FLAG\n");
+                    }
                     break;
+
                 case FLAG_RCV:
-                    if (c == ADDRESS_T) state = A_RCV;
-                    else if (c != FLAG) state = START;
+                    printf("State: FLAG_RCV\n");
+                    if (c == ADDRESS_T) {
+                        state = A_RCV;
+                        printf("Transition to A_RCV\n");
+                    } else if (c != FLAG) {
+                        state = START;
+                        printf("Received byte is not ADDRESS_T, resetting to START\n");
+                    } else {
+                        printf("Received byte is FLAG, staying in FLAG_RCV\n");
+                    }
                     break;
+
                 case A_RCV:
-                    if (c == 0 || c == (1 << 6)){
+                    printf("State: A_RCV\n");
+                    if (c == 0 || c == (1 << 6)) {
                         state = C_RCV;
                         control = c;
-                    }
-                    else if (c == FLAG) state = FLAG_RCV;
-                    else if (c == CONTROL_DISC) {
-                        //sendSupervisionFrame(fd, A_RE, C_DISC);
+                        printf("Transition to C_RCV with control: %x\n", control);
+                    } else if (c == FLAG) {
+                        state = FLAG_RCV;
+                        printf("Received FLAG, transitioning back to FLAG_RCV\n");
+                    } else if (c == CONTROL_DISC) {
+                        printf("Received DISC control\n");
                         buf[0] = FLAG;
                         buf[1] = ADDRESS_R;
                         buf[2] = CONTROL_DISC;
                         buf[3] = buf[1] ^ buf[2];
                         buf[4] = FLAG;
-                        if(writeBytes(buf, 5)) printf("escrevi 5 bytes\n");
-                        printf("Disconected\n");
+
+                        if (writeBytes(buf, 5)) printf("Sent 5 bytes for DISC response\n");
+                        printf("Disconnected\n");
                         alarm(3);
                         alarmEnabled = TRUE;
                         return 0;
+                    } else {
+                        state = START;
+                        printf("Invalid control byte, resetting to START\n");
                     }
-                    else state = START;
                     break;
+
                 case C_RCV:
-                    if (c == (ADDRESS_T ^ control)) state = READING_DATA;
-                    else if (c == FLAG) state = FLAG_RCV;
-                    else state = START;
+                    printf("State: C_RCV\n");
+                    if (c == (ADDRESS_T ^ control)) {
+                        state = READING_DATA;
+                        printf("Transition to READING_DATA\n");
+                    } else if (c == FLAG) {
+                        state = FLAG_RCV;
+                        printf("Received FLAG, transitioning back to FLAG_RCV\n");
+                    } else {
+                        state = START;
+                        printf("Invalid control, resetting to START\n");
+                    }
                     break;
+
                 case READING_DATA:
-                    if (c== ESCAPE) state = DATA_FOUND_ESC;
-                    else if (c == FLAG){
-                        unsigned char bcc2 = packet[i-1];
+                    printf("State: READING_DATA\n");
+                    if (c == ESCAPE) {
+                        state = DATA_FOUND_ESC;
+                        printf("Transition to DATA_FOUND_ESC\n");
+                    } else if (c == FLAG) {
+                        unsigned char bcc2 = packet[i - 1];
+                        printf("Received FLAG, checking BCC\n");
                         i--;
                         packet[i] = '\0';
                         unsigned char acc = packet[0];
@@ -315,55 +351,63 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                         for (unsigned int j = 1; j < i; j++)
                             acc ^= packet[j];
 
-                        if (bcc2 == acc){
+                        printf("BCC2: %x, calculated acc: %x\n", bcc2, acc);
+                        if (bcc2 == acc) {
                             state = STOP_STATE;
-                            //sendSupervisionFrame(fd, A_RE, C_RR(tramaRx));
+                            printf("BCC check successful, transitioning to STOP_STATE\n");
                             buf[0] = FLAG;
                             buf[1] = ADDRESS_R;
                             buf[2] = nr ? CONTROL_RR1 : CONTROL_RR0;
                             buf[3] = buf[1] ^ buf[2];
                             buf[4] = FLAG;
-                            if(writeBytes(buf, 5)) printf("escrevi 5 bytes\n");
-                            printf("Data read.\n");
+
+                            if (writeBytes(buf, 5)) printf("Sent 5 bytes for RR response\n");
+                            printf("Data read successfully.\n");
                             alarm(3);
                             alarmEnabled = TRUE;
-                            nr = (nr+ 1)%2;
+                            nr = (nr + 1) % 2;
                             return i; 
-                        }
-                        else{
-                            printf("Error: retransmition\n");
-                            //sendSupervisionFrame(fd, A_RE, C_REJ(tramaRx));
+                        } else {
+                            printf("Error: retransmission required\n");
                             buf[0] = FLAG;
                             buf[1] = ADDRESS_R;
                             buf[2] = nr ? CONTROL_REJ1 : CONTROL_REJ0;
                             buf[3] = buf[1] ^ buf[2];
                             buf[4] = FLAG;
-                            if(writeBytes(buf, 5)) printf("escrevi 5 bytes\n");
-                            return -1;
-                        };
 
-                    }
-                    else{
+                            if (writeBytes(buf, 5)) printf("Sent 5 bytes for REJ response\n");
+                            return -1;
+                        }
+                    } else {
                         packet[i++] = c;
+                        printf("Appending data byte: %x\n", c);
                     }
                     break;
+
                 case DATA_FOUND_ESC:
+                    printf("State: DATA_FOUND_ESC\n");
                     state = READING_DATA;
-                    if (c == ESCAPE || c == FLAG) packet[i++] = c;
-                    else{
+                    if (c == ESCAPE || c == FLAG) {
+                        packet[i++] = c;
+                        printf("Appending unescaped byte: %x\n", c);
+                    } else {
                         packet[i++] = ESCAPE;
                         packet[i++] = c;
+                        printf("Escaped byte: %x\n", c);
                     }
                     break;
+
                 default: 
+                    printf("Unknown state encountered\n");
                     break;
             }
         }
     }
 
-
+    printf("Exiting llread function\n");
     return 0;
 }
+
 
 ////////////////////////////////////////////////
 // LLCLOSE

@@ -19,6 +19,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     if(l.role==LlRx) {
         unsigned char packet[MAX_PAYLOAD_SIZE];
         int size = llread(packet);
+        printf("DATA\n");
         for(int i = 0; i < size; i++) {
             printf("%x\n ", packet[i]);
         }
