@@ -14,7 +14,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     strcpy(l.serialPort, serialPort);
     l.timeout=timeout;
 
-    llopen(l);
+    if(llopen(l) == -1) {
+        printf("bruhhhhh could not connect ");
+        return -1;
+    };
 
     if(l.role==LlRx) {
         unsigned char packet[MAX_PAYLOAD_SIZE];

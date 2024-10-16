@@ -38,7 +38,7 @@ int llopen(LinkLayer connectionParameters)
     unsigned char buf_[BUFFER_SIZE + 1] = {0};
     retraNum= connectionParameters.nRetransmissions;
     time_out= connectionParameters.timeout;
-    while (state != STOP_STATE && alarmCount < 4)
+    while (state != STOP_STATE && alarmCount < retraNum)
     {
         if (alarmEnabled == FALSE && connectionParameters.role == LlTx)
         {
@@ -118,7 +118,7 @@ int llopen(LinkLayer connectionParameters)
         printf("5 bytes have been written\n");
     }
     printf("Stopped\n");
-
+    if(alarmCount == retraNum ) return -1;
     sleep(1);
 
     return 0;
@@ -133,9 +133,7 @@ int checkCF(){
     unsigned char byte, control = 0;
     State state = START;
     unsigned char c;
-    printf("inicio \n");
-    while(state != STOP_STATE && !alarmEnabled){
-        //printf("LOPPPI\n");
+    while(state != STOP_STATE ){
         if ( readByte(&c) >0) {
             printf("Checking frame\n");
             switch (state) {
@@ -214,15 +212,15 @@ int llwrite(const unsigned char *buf, int bufSize)
     alarmCount = 0;
     printf("num of retries is %d\n",retraNum);
     printf("tries %d\n",tries);
-    while(tries < retraNum){
-        printf("here\n");
-        alarmEnabled = FALSE;
-        alarm(3);
+    alarmEnabled=FALSE;
+    while(alarmCount < retraNum){
         rej = acpt = 0;
-        printf("alarm enable %d",alarmEnabled);
+      
         while (!alarmEnabled){
             printf("alarm not enabled \n");
             int res = writeBytes(infoFrame, index+1);
+            alarmEnabled=TRUE;
+            alarm(3);
             printf(" res is %d", res);
             printf("wrote \n");
             printf("gave time out \n");
@@ -230,7 +228,7 @@ int llwrite(const unsigned char *buf, int bufSize)
                 printf(" it failed :(\n");
             }
             int control = checkCF();
-            printf("control is %s\n", control);
+            printf("control is %x\n", control);
             if(!control){ //CHANGE IN FUTURE PLS
                 printf("not control\n");
                 continue;
