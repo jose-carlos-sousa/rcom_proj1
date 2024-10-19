@@ -26,6 +26,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         for(int i = 0; i < size; i++) {
             printf("%x\n ", packet[i]);
         }
+        llclose(0);
 
     }
 
@@ -49,6 +50,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         int bytes = llwrite( buf, 8);
 
         printf("%d bytes written\n", bytes);
+        llclose(0);
 
 
 
