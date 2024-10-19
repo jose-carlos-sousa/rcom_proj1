@@ -135,7 +135,7 @@ int checkCF(){
     unsigned char c;
     while(state != STOP_STATE && alarmEnabled ){
         if ( readByte(&c) >0) {
-            printf("Checking frame\n");
+            printf("Checking frame %x\n",c);
             switch (state) {
                 case (START):
                     if (c == FLAG) {
@@ -212,15 +212,17 @@ int llwrite(const unsigned char *buf, int bufSize)
     int rej = 0;
     alarmCount = 0;
     alarmEnabled=FALSE;
-    while(alarmCount < retraNum){ // VOU TENTAR ESCREVER X VEZES
-            int res = writeBytes(infoFrame, index+1); //ESCREVO
-            alarmEnabled=TRUE; //ATIVO ALARME
-            alarm(3);
-            printf(" res is %d", res);
-            printf("wrote \n");
-            printf("gave time out \n");
-            if( res == -1){
-                printf(" it failed :(\n");
+    while(alarmCount < retraNum ){ // VOU TENTAR ESCREVER X VEZES
+            if(alarmEnabled == FALSE){
+                int res = writeBytes(infoFrame, index+1); //ESCREVO
+                alarmEnabled=TRUE; //ATIVO ALARME
+                alarm(time_out);
+                printf(" res is %d", res);
+                printf("wrote \n");
+                printf("gave time out \n");
+                if( res == -1){
+                    printf(" it failed :(\n");
+                }
             }
             int control = checkCF(); // VOU VER SE O GAJO DISSE QUE RECEBEU
             printf("control is %x\n", control);
