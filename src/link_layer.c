@@ -13,6 +13,7 @@ int ns=0;
 int nr =1;
 int time_out=0;
 int retraNum=0;
+int role=0;
 void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
@@ -38,6 +39,7 @@ int llopen(LinkLayer connectionParameters)
     unsigned char buf_[BUFFER_SIZE + 1] = {0};
     retraNum= connectionParameters.nRetransmissions;
     time_out= connectionParameters.timeout;
+    role=connectionParameters.role;
     while (state != STOP_STATE && alarmCount < retraNum)
     {
         if (alarmEnabled == FALSE && connectionParameters.role == LlTx)
@@ -406,7 +408,196 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 int llclose(int showStatistics)
 {
     // TODO
+    alarmCount=0;
+    int sucess=0;
+    if (role==LlTx){ // SE EU FOR TRASNMISSOE
+        while(alarmCount < retraNum && !sucess){
+            unsigned char buf[5]={0};
+            buf[0] = FLAG;
+            buf[1] = ADDRESS_T;
+            buf[2] = CONTROL_DISC;
+            buf[3] = buf[1] ^ buf[2];
+            buf[4] = FLAG;
+            writeBytes((const unsigned char *)buf, 5);
+            alarm(time_out);
+            alarmEnabled=TRUE;
+            State state =START;
+            char c =0;
+            while(state != STOP_STATE && alarmEnabled ){
+                if ( readByte(&c) >0) {
+                    printf("Checking frame\n");
+                    switch (state) {
+                        case (START):
+                            if (c == FLAG) {
+                                state = FLAG_RCV;
+                                printf("START -> FLAG_RCV\n");
+                            }
+                            break;
+                        case (FLAG_RCV):
+                            if (c == ADDRESS_T) {
+                                state = A_RCV;
+                                printf("FLAG_RCV -> A_RCV\n");
+                                }
+                            else if (c == FLAG) break;
+                            else state = START;
+                            break;
+                        case (A_RCV):
+                            if (c == CONTROL_DISC ) {
+                                state = C_RCV;
+                                printf("A_RCV -> C_RCV\n");
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (C_RCV):
+                            if (c == ADDRESS_T ^ CONTROL_DISC) {
+                                state = BCC_OK;
+                                printf("C_RCV -> BCC_OK\n");
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (BCC_OK):
+                            if (c == FLAG) {
+                                state = STOP_STATE;
+                                alarm(0);
+                                alarmEnabled=FALSE;
+                                sucess=1;
+                                printf("BCC_OK -> STOP_STATE\n");
+                                printf("Finished checking\n");
+                                }
+                            else state = START;
+                            break;
+                    }
+                }
+            }
 
+        }
+     //SEND UA
+     printf("vou mandar o UA\n");
+    unsigned char buf[5]={0};
+    buf[0] = FLAG;
+    buf[1] = ADDRESS_T;
+    buf[2] = CONTROL_UA;
+    buf[3] = buf[1] ^ buf[2];
+    buf[4] = FLAG;
+    writeBytes((const unsigned char *)buf, 5);
+
+
+
+    }else if(role==LlRx){ // SE EU FOR RECETOR
+                State state =START;
+                char c =0;
+                while(state != STOP_STATE ){
+                if ( readByte(&c) >0) {
+                    printf("got %x\n",c);
+                    switch (state) {
+                        case (START):
+                            if (c == FLAG) {
+                                state = FLAG_RCV;
+                                printf("START -> FLAG_RCV\n");
+                            }
+                            break;
+                        case (FLAG_RCV):
+                            if (c == ADDRESS_T) {
+                                state = A_RCV;
+                                printf("FLAG_RCV -> A_RCV\n");
+                                }
+                            else if (c == FLAG) break;
+                            else state = START;
+                            break;
+                        case (A_RCV):
+                            if (c == CONTROL_DISC ) {
+                                state = C_RCV;
+                                printf("A_RCV -> C_RCV\n");
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (C_RCV):
+                            if (c == ADDRESS_T ^ CONTROL_DISC) {
+                                state = BCC_OK;
+                                printf("C_RCV -> BCC_OK\n");
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (BCC_OK):
+                            if (c == FLAG) {
+                                state = STOP_STATE;
+                                printf("BCC_OK -> STOP_STATE\n");
+                                printf("Finished checking\n");
+                                }
+                            else state = START;
+                            break;
+                    }
+                }
+            }
+            while(alarmCount < retraNum && !sucess){
+                printf("vou mandar disc e esperar UA\n");
+                unsigned char buf[5]={0};
+                buf[0] = FLAG;
+                buf[1] = ADDRESS_T;
+                buf[2] = CONTROL_DISC;
+                buf[3] = buf[1] ^ buf[2];
+                buf[4] = FLAG;
+                writeBytes((const unsigned char *)buf, 5);
+                alarm(time_out);
+                alarmEnabled=TRUE;
+                State state =START;
+                char c =0;
+                while(state != STOP_STATE && alarmEnabled ){
+                    if ( readByte(&c) >0) {
+                        printf("Checking frame\n");
+                        switch (state) {
+                            case (START):
+                                if (c == FLAG) {
+                                    state = FLAG_RCV;
+                                    printf("START -> FLAG_RCV\n");
+                                }
+                                break;
+                            case (FLAG_RCV):
+                                if (c == ADDRESS_T) {
+                                    state = A_RCV;
+                                    printf("FLAG_RCV -> A_RCV\n");
+                                    }
+                                else if (c == FLAG) break;
+                                else state = START;
+                                break;
+                            case (A_RCV):
+                                if (c == CONTROL_UA ) {
+                                    state = C_RCV;
+                                    printf("A_RCV -> C_RCV\n");
+                                    }
+                                else if (c == FLAG) state = FLAG_RCV;
+                                else state = START;
+                                break;
+                            case (C_RCV):
+                                if (c == ADDRESS_T ^ CONTROL_UA) {
+                                    state = BCC_OK;
+                                    printf("C_RCV -> BCC_OK\n");
+                                    }
+                                else if (c == FLAG) state = FLAG_RCV;
+                                else state = START;
+                                break;
+                            case (BCC_OK):
+                                if (c == FLAG) {
+                                    state = STOP_STATE;
+                                    alarm(0);
+                                    alarmEnabled=FALSE;
+                                    sucess=1;
+                                    printf("BCC_OK -> STOP_STATE\n");
+                                    printf("Finished checking\n");
+                                    }
+                                else state = START;
+                                break;
+                        }
+                    }
+                }
+
+            }
+    }
     int clstat = closeSerialPort();
+
     return clstat;
 }
