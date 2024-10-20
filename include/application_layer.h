@@ -3,6 +3,18 @@
 
 #ifndef _APPLICATION_LAYER_H_
 #define _APPLICATION_LAYER_H_
+#define CTRL_START 0x01
+#define CTRL_END 0x03
+#define CTRL_DATA 0x02
+#define MAX_FILE_NAME 50
+#define T_FILESIZE 0
+#define T_FILENAME 1
+
+enum state {
+    TRANF_START,
+    TRANF_DATA,
+    TRANF_END
+};
 
 // Application layer main function.
 // Arguments:
