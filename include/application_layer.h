@@ -9,7 +9,7 @@
 #define MAX_FILE_NAME 50
 #define T_FILESIZE 0
 #define T_FILENAME 1
-
+#define MAX_PACKET_SIZE MAX_PAYLOAD_SIZE+5
 enum state {
     TRANF_START,
     TRANF_DATA,
