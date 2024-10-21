@@ -11,16 +11,20 @@
 #define T_FILESIZE 0
 #define T_FILENAME 1
 #define MAX_FILE_NAME 50
-#define MAX_PACKET_SIZE (MAX_PAYLOAD_SIZE + 5)
+#define MAX_PACKET_SIZE (MAX_PAYLOAD_SIZE + 6)
 
 typedef struct {
     size_t file_size;
     char file_name[MAX_FILE_NAME];
     size_t bytesRead;
+    unsigned char sequence_number; // Added sequence number
+    unsigned char expected_sequence_number; // Added expected sequence number
 } props;
 
+
 static enum state stateReceive = TRANF_START;
-static props mypros = {0, "", 0};
+static props mypros = {0, "", 0, 0, 0}; // Initialize sequence number and expected sequence number to 0
+
 
 static void handleError(const char *msg) {
     perror(msg);
@@ -42,14 +46,16 @@ int sendData(size_t nBytes, unsigned char *data) {
 
     unsigned char packet[MAX_PACKET_SIZE];
     packet[0] = DATA;
-    packet[1] = nBytes / 256;
-    packet[2] = nBytes % 256;
+    packet[1] = mypros.sequence_number; // Add sequence number
+    packet[2] = nBytes / 256;
+    packet[3] = nBytes % 256;
 
-    memcpy(packet + 3, data, nBytes);
+    memcpy(packet + 4, data, nBytes);
 
-    return llwrite(packet, nBytes + 3);
+    mypros.sequence_number = (mypros.sequence_number + 1) % 256; // Increment sequence number (wrap around)
+
+    return llwrite(packet, nBytes + 4); // Adjust size for sequence number
 }
-
 size_t uchartoi(unsigned char n, unsigned char *numbers) {
     size_t value = 0;
     for (size_t i = 0; i < n; i++) {
@@ -88,9 +94,10 @@ int sendCtrl(unsigned char C, const char *filename, size_t file_size) {
 
 unsigned char *readData(unsigned char *buf, size_t *new_data_size) {
     if (buf == NULL) return NULL;
-    *new_data_size = (buf[1] * 256) + buf[2];
-    return buf + 3;
+    *new_data_size = (buf[2] * 256) + buf[3]; // Adjust for sequence number
+    return buf + 4; // Adjust for sequence number
 }
+
 
 int readCtrl(unsigned char *buf) {
     if (buf == NULL) return -1;
@@ -203,6 +210,13 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
                     return;
                 }
             } else if (buf[0] == DATA) {
+                   if (buf[1] != mypros.expected_sequence_number) {
+                    // Handle sequence number mismatch
+                    fprintf(stderr, "Sequence number mismatch. Expected: %d, Received: %d\n",
+                            mypros.expected_sequence_number, buf[1]);
+                 ///   continue; // Skip processing this packet partiu o codigo tentar fazer isto tipo dava skip a partes da imagem meio que
+                 
+                }
                 size_t dataSize;
                 unsigned char *packet = readData(buf, &dataSize);
                 if (!packet) {
@@ -211,6 +225,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
                 }
                 fwrite(packet, 1, dataSize, file);
                 mypros.bytesRead += dataSize;
+                 // Increment expected sequence number
+                mypros.expected_sequence_number = (mypros.expected_sequence_number + 1) % 256;
             }
         }
 

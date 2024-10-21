@@ -15,8 +15,8 @@ RX_SERIAL_PORT = /dev/ttyS11
 
 BAUD_RATE = 9600
 
-TX_FILE = pinguin.gif
-RX_FILE = pinguin-novo.gif
+TX_FILE = musica.mp4
+RX_FILE = musica2.mp4
 
 # Targets
 .PHONY: all

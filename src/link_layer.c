@@ -194,7 +194,10 @@ int llwrite(const unsigned char *buf, int bufSize)
     if( bcc2== FLAG){
         infoFrame[index++]=ESCAPE;
         infoFrame[index]=MOD_FLAG;
-    }else{
+    }else if(bcc2 == ESCAPE) {
+        infoFrame[index++]=ESCAPE;
+        infoFrame[index]=MOD_ESCAPE;
+    }else {
         infoFrame[index]=bcc2;
     }
     infoFrame[++index]=FLAG;
@@ -310,7 +313,6 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                         state = DATA_FOUND_ESC;
                     } else if (c == FLAG) {
                         unsigned char bcc2 = packet[i - 1];
-
                         i--;
                         packet[i] = '\0';
                         unsigned char acc = packet[0];
@@ -319,7 +321,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             acc ^= packet[j];
                         if( bcc2 == FLAG || acc == FLAG){
                             printf("bcc2 é %x\n",bcc2);
-                             printf("acc é %x\n",acc);
+                            printf("acc é %x\n",acc);
                         }
                         if (bcc2 == acc) {
                             state = STOP_STATE;
