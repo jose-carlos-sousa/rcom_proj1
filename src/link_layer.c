@@ -319,10 +319,6 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 
                         for (unsigned int j = 1; j < i; j++)
                             acc ^= packet[j];
-                        if( bcc2 == FLAG || acc == FLAG){
-                            printf("bcc2 é %x\n",bcc2);
-                            printf("acc é %x\n",acc);
-                        }
                         if (bcc2 == acc) {
                             state = STOP_STATE;
                             buf[0] = FLAG;
