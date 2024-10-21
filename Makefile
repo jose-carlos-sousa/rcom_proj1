@@ -15,8 +15,8 @@ RX_SERIAL_PORT = /dev/ttyS11
 
 BAUD_RATE = 9600
 
-TX_FILE = penguin.gif
-RX_FILE = penguin-received.gif
+TX_FILE = mendes.jpg
+RX_FILE = mendes-rc.jpg
 
 # Targets
 .PHONY: all

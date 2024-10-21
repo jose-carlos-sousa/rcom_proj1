@@ -146,6 +146,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
     }
 
     if (l.role == LlTx) {
+        printf("olaola\n");
         unsigned char buffer[MAX_PACKET_SIZE];
         FILE *file = fopen(filename, "rb");
         if (!file) {
