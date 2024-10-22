@@ -11,6 +11,7 @@ int alarmEnabled = FALSE;
 int alarmCount = 0;
 int ns=0;
 int nr =1;
+int lastSeqNumber = -1;
 int time_out=0;
 int retraNum=0;
 int role=0;
@@ -272,6 +273,18 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     if (c == 0 || c == (1 << 6)) {
                         state = C_RCV;
                         control = c;
+                        int seqNumber = (control >> 6) & 0x01;
+                        if (seqNumber == lastSeqNumber) {
+                            printf("Received frame with same sequence number\n");
+                            buf[0] = FLAG;
+                            buf[1] = ADDRESS_T;
+                            buf[2] = nr ? CONTROL_RR1 : CONTROL_RR0;
+                            buf[3] = buf[1] ^ buf[2];
+                            buf[4] = FLAG;
+
+                            if (writeBytes(buf, 5)) printf("Sent 5 bytes for RR response (duplicate)\n");
+                            return 0;
+                        }
                     } else if (c == FLAG) {
                         state = FLAG_RCV;
                     } else if (c == CONTROL_DISC) {
@@ -328,6 +341,8 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             buf[4] = FLAG;
 
                             if (writeBytes(buf, 5)) printf("Sent 5 bytes for RR response\n");
+
+                            lastSeqNumber = (control >> 6) & 0x01;
                             nr = (nr + 1) % 2;
                             return i; 
                         } else {
