@@ -36,9 +36,6 @@ static void handleFatalError(const char *msg, FILE *file, int closeLinkLayer) {
     if (file) {
         fclose(file);
     }
-    if (closeLinkLayer) {
-        llclose(FALSE);
-    }
 }
 
 int sendData(size_t nBytes, unsigned char *data) {
