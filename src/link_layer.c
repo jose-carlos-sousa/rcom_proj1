@@ -270,7 +270,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             printf("Received frame with same sequence number\n");
                             buf[0] = FLAG;
                             buf[1] = ADDRESS_T;
-                            buf[2] = nr ? CONTROL_RR1 : CONTROL_RR0;
+                            buf[2] = !lastSeqNumber ? CONTROL_RR1 : CONTROL_RR0;
                             buf[3] = buf[1] ^ buf[2];
                             buf[4] = FLAG;
 
@@ -287,6 +287,16 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 
                         writeBytes((const unsigned char *)buf, 5);
                         state = START;
+                    } else if (c == CONTROL_DISC){ // O TRANSMISSOR FOI PARA O LLCLOSE I GUESS
+                        buf[0] = FLAG;
+                        buf[1] = ADDRESS_T;
+                        buf[2] = CONTROL_DISC;
+                        buf[3] = buf[1] ^ buf[2];
+                        buf[4] = FLAG;
+
+                        writeBytes((const unsigned char *)buf, 5);
+                        printf("Reading stopped abruptly, transmissor is closing the connection (what)\n");
+                        return -1; 
                     } else if (c == FLAG) {
                         state = FLAG_RCV;
                     } else {
