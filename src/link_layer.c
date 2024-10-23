@@ -54,13 +54,11 @@ int llopen(LinkLayer connectionParameters)
             alarm(3);
             alarmEnabled = TRUE;
         }
-        int address, control = 0;
+        int control = 0;
         if(connectionParameters.role == LlTx) {
-            address = ADDRESS_T;
             control = CONTROL_UA;
         }
         else {
-            address = ADDRESS_T;
             control = CONTROL_SET;
         }
         int r =readByte((unsigned char *)buf_);
@@ -73,7 +71,7 @@ int llopen(LinkLayer connectionParameters)
                 }
                 break;
             case (FLAG_RCV):
-                if (buf_[0] == address) {
+                if (buf_[0] == ADDRESS_T) {
                     state = A_RCV;
                     }
                 else if (buf_[0] == FLAG) break;
@@ -87,7 +85,7 @@ int llopen(LinkLayer connectionParameters)
                 else state = START;
                 break;
             case (C_RCV):
-                if (buf_[0] == address^control) {
+                if (buf_[0] == ADDRESS_T^control) {
                     state = BCC_OK;
                     }
                 else if (buf_[0] == FLAG) state = FLAG_RCV;
@@ -202,8 +200,6 @@ int llwrite(const unsigned char *buf, int bufSize)
         infoFrame[index]=bcc2;
     }
     infoFrame[++index]=FLAG;
-    int acpt = 0;
-    int rej = 0;
     alarmCount = 0;
     alarmEnabled=FALSE;
     while(alarmCount < retraNum ){ // VOU TENTAR ESCREVER X VEZES
@@ -217,22 +213,18 @@ int llwrite(const unsigned char *buf, int bufSize)
             }
             int control = checkCF(); // VOU VER SE O GAJO DISSE QUE RECEBEU
             if(!control){ //N DISSE NADA DE JEITO O GAJO
-                printf("not control\n");
+                printf("empty control\n");
             }
             else if(control == CONTROL_REJ0 || control == CONTROL_REJ1) {
                 printf("rej\n");
-                rej = 1; //rejeitou :( proxima tentativa
             }
-            else if(control == CONTROL_RR0 || control == CONTROL_RR1) {
+            else if((control == CONTROL_RR0 && ns == 1) || (control == CONTROL_RR1) && ns == 0) {
                 printf("accept\n");
-                acpt = 1;
                 ns = (ns+1) % 2; //meto que agr vou para o outro
                 return 0; //bazo
             }
     }
-    if(acpt ==0) return -1;
-
-    return 0;
+    return -1;
 }
 
 ////////////////////////////////////////////////
@@ -285,18 +277,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             if (writeBytes(buf, 5)) printf("Sent 5 bytes for RR response (duplicate)\n");
                             return 0;
                         }
-                    } else if (c == FLAG) {
-                        state = FLAG_RCV;
-                    } else if (c == CONTROL_DISC) {
-                        buf[0] = FLAG;
-                        buf[1] = ADDRESS_T;
-                        buf[2] = CONTROL_DISC;
-                        buf[3] = buf[1] ^ buf[2];
-                        buf[4] = FLAG;
-
-                        if (writeBytes(buf, 5)) printf("Sent 5 bytes for DISC response\n");
-                        return 0;
-                    }else if (c == CONTROL_SET){ // ESTE E O CASO EM QUE HOUVE ERRO NO MEU UA
+                    } else if (c == CONTROL_SET){ // ESTE E O CASO EM QUE HOUVE ERRO NO MEU UA
                         //NESTE CASO O QUE FAÇO E VOLTO A MANDAR E VOU ESTADO INICIAL
                         buf[0] = FLAG;
                         buf[1] = ADDRESS_T;
@@ -306,6 +287,8 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 
                         writeBytes((const unsigned char *)buf, 5);
                         state = START;
+                    } else if (c == FLAG) {
+                        state = FLAG_RCV;
                     } else {
                         state = START;
                     }
