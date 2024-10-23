@@ -342,7 +342,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             printf("Error: retransmission required\n");
                             buf[0] = FLAG;
                             buf[1] = ADDRESS_T;
-                            buf[2] = nr ? CONTROL_REJ1 : CONTROL_REJ0;
+                            buf[2] = !nr ? CONTROL_REJ1 : CONTROL_REJ0;
                             buf[3] = buf[1] ^ buf[2];
                             buf[4] = FLAG;
 
