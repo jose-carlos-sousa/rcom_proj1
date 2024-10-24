@@ -20,7 +20,8 @@ void alarmHandler(int signal)
     alarmEnabled = FALSE;
     alarmCount++;
 
-    printf("Alarm #%d\n", alarmCount);
+    if (alarmCount < 3) printf("Retry #%d\n", alarmCount);
+    else printf("Max retries reached\n");
 }
 
 ////////////////////////////////////////////////
@@ -38,8 +39,8 @@ int llopen(LinkLayer connectionParameters)
     State state = START;
     unsigned char buf[5] = {0};
     unsigned char buf_[BUFFER_SIZE + 1] = {0};
-    retraNum= connectionParameters.nRetransmissions;
-    time_out= connectionParameters.timeout;
+    retraNum = connectionParameters.nRetransmissions;
+    time_out = connectionParameters.timeout;
     role=connectionParameters.role;
     while (state != STOP_STATE && alarmCount < retraNum)
     {
@@ -202,7 +203,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     infoFrame[++index]=FLAG;
     alarmCount = 0;
     alarmEnabled=FALSE;
-    while(alarmCount < retraNum ){ // VOU TENTAR ESCREVER X VEZES
+    while(alarmCount < retraNum){ // VOU TENTAR ESCREVER X VEZES
             if(alarmEnabled == FALSE){
                 int res = writeBytes(infoFrame, index+1); //ESCREVO
                 alarmEnabled=TRUE; //ATIVO ALARME
@@ -212,14 +213,11 @@ int llwrite(const unsigned char *buf, int bufSize)
                 }
             }
             int control = checkCF(); // VOU VER SE O GAJO DISSE QUE RECEBEU
-            if(!control){ //N DISSE NADA DE JEITO O GAJO
-                printf("empty control\n");
-            }
-            else if(control == CONTROL_REJ0 || control == CONTROL_REJ1) {
-                printf("rej\n");
+            if(control == CONTROL_REJ0 || control == CONTROL_REJ1) {
+                printf("Frame rejected :(\n");
             }
             else if((control == CONTROL_RR0 && ns == 1) || (control == CONTROL_RR1) && ns == 0) {
-                printf("accept\n");
+                printf("Frame accepted\n");
                 ns = (ns+1) % 2; //meto que agr vou para o outro
                 return 0; //bazo
             }
@@ -394,11 +392,11 @@ int llclose(int showStatistics)
             buf[4] = FLAG;
             writeBytes((const unsigned char *)buf, 5);
             alarm(time_out);
-            alarmEnabled=TRUE;
-            State state =START;
+            alarmEnabled = TRUE;
+            State state = START;
             char c =0;
-            while(state != STOP_STATE && alarmEnabled ){
-                if ( readByte(&c) >0) {
+            while(state != STOP_STATE && alarmEnabled){
+                if ( readByte(&c) > 0) {
                     switch (state) {
                         case (START):
                             if (c == FLAG) {
@@ -441,7 +439,6 @@ int llclose(int showStatistics)
 
         }
      //SEND UA
-     printf("vou mandar o UA\n");
     unsigned char buf[5]={0};
     buf[0] = FLAG;
     buf[1] = ADDRESS_T;
@@ -449,6 +446,7 @@ int llclose(int showStatistics)
     buf[3] = buf[1] ^ buf[2];
     buf[4] = FLAG;
     writeBytes((const unsigned char *)buf, 5);
+    printf("Connection terminated successfully.\n");
 
 
 
@@ -494,7 +492,7 @@ int llclose(int showStatistics)
                 }
             }
             while(alarmCount < retraNum && !sucess){
-                unsigned char buf[5]={0};
+                unsigned char buf[5] = {0};
                 buf[0] = FLAG;
                 buf[1] = ADDRESS_T;
                 buf[2] = CONTROL_DISC;
@@ -502,11 +500,11 @@ int llclose(int showStatistics)
                 buf[4] = FLAG;
                 writeBytes((const unsigned char *)buf, 5);
                 alarm(time_out);
-                alarmEnabled=TRUE;
-                State state =START;
-                char c =0;
-                while(state != STOP_STATE && alarmEnabled ){
-                    if ( readByte(&c) >0) {
+                alarmEnabled = TRUE;
+                State state = START;
+                char c = 0;
+                while(state != STOP_STATE && alarmEnabled) {
+                    if ( readByte(&c) > 0) {
                         switch (state) {
                             case (START):
                                 if (c == FLAG) {
@@ -541,6 +539,7 @@ int llclose(int showStatistics)
                                     alarm(0);
                                     alarmEnabled=FALSE;
                                     sucess=1;
+                                    printf("Connection terminated successfully.\n");
                                     }
                                 else state = START;
                                 break;
