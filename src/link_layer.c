@@ -37,7 +37,6 @@ int llopen(LinkLayer connectionParameters)
         return -1;
     }
     State state = START;
-    unsigned char buf[5] = {0};
     unsigned char buf_[BUFFER_SIZE + 1] = {0};
     retraNum = connectionParameters.nRetransmissions;
     time_out = connectionParameters.timeout;
@@ -46,12 +45,7 @@ int llopen(LinkLayer connectionParameters)
     {
         if (alarmEnabled == FALSE && connectionParameters.role == LlTx)
         {
-            buf[0] = FLAG;
-            buf[1] = ADDRESS_T;
-            buf[2] = CONTROL_SET;
-            buf[3] = buf[1] ^ buf[2];
-            buf[4] = FLAG;
-            if(writeBytes(buf, 5) != -1) printf(" escrevi 5 bytes\n");
+            sendSFrame(CONTROL_SET);
             alarm(3);
             alarmEnabled = TRUE;
         }
@@ -104,13 +98,7 @@ int llopen(LinkLayer connectionParameters)
         }
         
     if (connectionParameters.role == LlRx) {
-        buf[0] = FLAG;
-        buf[1] = ADDRESS_T;
-        buf[2] = CONTROL_UA;
-        buf[3] = buf[1] ^ buf[2];
-        buf[4] = FLAG;
-
-        writeBytes((const unsigned char *)buf, 5);
+        sendSFrame(CONTROL_UA);
     }
     if(alarmCount == retraNum ) return -1;
     return 0;
@@ -233,9 +221,8 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
     unsigned char c, control = 0;
     int i = 0;
     State state = START;
-    unsigned char buf[5] = {0};
 
-    printf("Starting llread...\n");
+    printf("Reading...\n");
 
     while (state != STOP_STATE) {  
         if (readByte(&c) > 0) {
@@ -245,7 +232,6 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     if (c == FLAG) {
                         state = FLAG_RCV;
                     } else {
-                        printf("Received byte is not FLAG\n");
                     }
                     break;
 
@@ -255,7 +241,6 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     } else if (c != FLAG) {
                         state = START;
                     } else {
-                        printf("Received byte is FLAG, staying in FLAG_RCV\n");
                     }
                     break;
 
@@ -266,34 +251,14 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                         int seqNumber = (control >> 6) & 0x01;
                         if (seqNumber == lastSeqNumber) {
                             printf("Received frame with same sequence number\n");
-                            buf[0] = FLAG;
-                            buf[1] = ADDRESS_T;
-                            buf[2] = !lastSeqNumber ? CONTROL_RR1 : CONTROL_RR0;
-                            buf[3] = buf[1] ^ buf[2];
-                            buf[4] = FLAG;
-
-                            if (writeBytes(buf, 5)) printf("Sent 5 bytes for RR response (duplicate)\n");
+                            if (sendSFrame(!lastSeqNumber ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response (duplicate)\n");
                             return 0;
                         }
                     } else if (c == CONTROL_SET){ // ESTE E O CASO EM QUE HOUVE ERRO NO MEU UA
-                        //NESTE CASO O QUE FAÇO E VOLTO A MANDAR E VOU ESTADO INICIAL
-                        buf[0] = FLAG;
-                        buf[1] = ADDRESS_T;
-                        buf[2] = CONTROL_UA;
-                        buf[3] = buf[1] ^ buf[2];
-                        buf[4] = FLAG;
-
-                        writeBytes((const unsigned char *)buf, 5);
+                        sendSFrame(CONTROL_UA);
                         state = START;
                     } else if (c == CONTROL_DISC){ // O TRANSMISSOR FOI PARA O LLCLOSE I GUESS
-                        buf[0] = FLAG;
-                        buf[1] = ADDRESS_T;
-                        buf[2] = CONTROL_DISC;
-                        buf[3] = buf[1] ^ buf[2];
-                        buf[4] = FLAG;
-
-                        writeBytes((const unsigned char *)buf, 5);
-                        printf("Reading stopped abruptly, transmissor is closing the connection (what)\n");
+                        if (sendSFrame(CONTROL_DISC)) printf("Reading stopped abruptly, transmissor is closing the connection (what)\n");
                         return -1; 
                     } else if (c == FLAG) {
                         state = FLAG_RCV;
@@ -325,26 +290,14 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             acc ^= packet[j];
                         if (bcc2 == acc) {
                             state = STOP_STATE;
-                            buf[0] = FLAG;
-                            buf[1] = ADDRESS_T;
-                            buf[2] = nr ? CONTROL_RR1 : CONTROL_RR0;
-                            buf[3] = buf[1] ^ buf[2];
-                            buf[4] = FLAG;
-
-                            if (writeBytes(buf, 5)) printf("Sent 5 bytes for RR response\n");
+                            if (sendSFrame(nr ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response\n");
 
                             lastSeqNumber = (control >> 6) & 0x01;
                             nr = (nr + 1) % 2;
                             return i; 
                         } else {
                             printf("Error: retransmission required\n");
-                            buf[0] = FLAG;
-                            buf[1] = ADDRESS_T;
-                            buf[2] = !nr ? CONTROL_REJ1 : CONTROL_REJ0;
-                            buf[3] = buf[1] ^ buf[2];
-                            buf[4] = FLAG;
-
-                            if (writeBytes(buf, 5)) printf("Sent 5 bytes for REJ response\n");
+                            if (sendSFrame(nr ? CONTROL_REJ0 : CONTROL_REJ1)) printf("Sent REJ response\n");
                             state = START;
                             memset(packet,i,0);
                             i=0;
@@ -384,13 +337,7 @@ int llclose(int showStatistics)
     int sucess=0;
     if (role==LlTx){ // SE EU FOR TRASNMISSOE
         while(alarmCount < retraNum && !sucess){
-            unsigned char buf[5]={0};
-            buf[0] = FLAG;
-            buf[1] = ADDRESS_T;
-            buf[2] = CONTROL_DISC;
-            buf[3] = buf[1] ^ buf[2];
-            buf[4] = FLAG;
-            writeBytes((const unsigned char *)buf, 5);
+            sendSFrame(CONTROL_DISC);
             alarm(time_out);
             alarmEnabled = TRUE;
             State state = START;
@@ -439,16 +386,7 @@ int llclose(int showStatistics)
 
         }
      //SEND UA
-    unsigned char buf[5]={0};
-    buf[0] = FLAG;
-    buf[1] = ADDRESS_T;
-    buf[2] = CONTROL_UA;
-    buf[3] = buf[1] ^ buf[2];
-    buf[4] = FLAG;
-    writeBytes((const unsigned char *)buf, 5);
-    printf("Connection terminated successfully.\n");
-
-
+    sendSFrame(CONTROL_UA);
 
     }else if(role==LlRx){ // SE EU FOR RECETOR
                 State state =START;
@@ -492,13 +430,7 @@ int llclose(int showStatistics)
                 }
             }
             while(alarmCount < retraNum && !sucess){
-                unsigned char buf[5] = {0};
-                buf[0] = FLAG;
-                buf[1] = ADDRESS_T;
-                buf[2] = CONTROL_DISC;
-                buf[3] = buf[1] ^ buf[2];
-                buf[4] = FLAG;
-                writeBytes((const unsigned char *)buf, 5);
+                sendSFrame(CONTROL_DISC);
                 alarm(time_out);
                 alarmEnabled = TRUE;
                 State state = START;
@@ -539,7 +471,6 @@ int llclose(int showStatistics)
                                     alarm(0);
                                     alarmEnabled=FALSE;
                                     sucess=1;
-                                    printf("Connection terminated successfully.\n");
                                     }
                                 else state = START;
                                 break;
@@ -550,6 +481,18 @@ int llclose(int showStatistics)
             }
     }
     int clstat = closeSerialPort();
+    if (clstat != -1) printf("Connection terminated successfully.\n");
 
     return clstat;
+}
+
+int sendSFrame(int control){
+    unsigned char buf[5] = {0};
+    buf[0] = FLAG;
+    buf[1] = ADDRESS_T;
+    buf[2] = control;
+    buf[3] = buf[1] ^ buf[2];
+    buf[4] = FLAG;
+
+    return writeBytes((const unsigned char *)buf, 5);
 }

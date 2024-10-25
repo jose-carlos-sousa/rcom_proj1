@@ -126,10 +126,10 @@ int readCtrl(unsigned char *buf) {
         mypros.file_name[MAX_FILE_NAME - 1] = '\0';
     } else if (buf[0] == C_END) {
         if (mypros.file_size != mypros.bytesRead) {
-            handleError("Number of bytes read doesn't match size of file");
+            handleError("Number of bytes read doesn't match size of file\n");
         }
         if (strcmp(mypros.file_name, file_name)) {
-            handleError("File names don't match");
+            handleError("File names don't match\n");
         }
     }
     return 0;
@@ -145,7 +145,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
     memcpy(l.serialPort, serialPort, sizeof(l.serialPort));
 
     if (llopen(l) == -1) {
-        handleFatalError("Link layer error: Failed to open the connection.", NULL, TRUE);
+        handleFatalError("Link layer error: Failed to open the connection.\n", NULL, TRUE);
         return;
     }
 
@@ -154,32 +154,32 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
         unsigned char buffer[MAX_PACKET_SIZE];
         FILE *file = fopen(filename, "rb");
         if (!file) {
-            handleFatalError("File error: Unable to open the file for reading.", NULL, TRUE);
+            handleFatalError("File error: Unable to open the file for reading.\n", NULL, TRUE);
             return;
         }
         struct stat fileStat;
         if (stat(filename, &fileStat) < 0) {
-            handleFatalError("File error: Unable to get file size.", file, TRUE);
+            handleFatalError("File error: Unable to get file size.\n", file, TRUE);
             return;
         }
         size_t file_size = fileStat.st_size;
 
         if (sendCtrl(C_START, filename, file_size) == -1) {
-            handleFatalError("Transmission error: Failed to send the START packet control.", file, TRUE);
+            handleFatalError("Transmission error: Failed to send the START packet control.\n", file, TRUE);
             return;
         }
 
         size_t bytes_read;
         while ((bytes_read = fread(buffer, 1, MAX_PAYLOAD_SIZE, file)) > 0) {
             if (sendData(bytes_read, buffer) == -1) {
-                handleFatalError("Transmission error: Failed to send the DATA packet control.", file, TRUE);
+                handleFatalError("Transmission error: Failed to send the DATA packet control.\n", file, TRUE);
                 return;
             }
             mypros.bytesRead += bytes_read;
         }
 
         if (sendCtrl(C_END, filename, file_size) == -1) {
-            handleFatalError("Transmission error: Failed to send the END packet control.", file, TRUE);
+            handleFatalError("Transmission error: Failed to send the END packet control.\n", file, TRUE);
             return;
         }
 
@@ -190,20 +190,20 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
         unsigned char buf[MAX_PACKET_SIZE];
         FILE *file = fopen(filename, "wb");
         if (!file) {
-            handleFatalError("File error: Unable to open the file for writing.", NULL, TRUE);
+            handleFatalError("File error: Unable to open the file for writing.\n", NULL, TRUE);
             return;
         }
 
         while (stateReceive != TRANF_END) {
             size_t bytes_read = llread(buf);
             if (bytes_read == -1) {
-                handleFatalError("Link layer error: Failed to read from the link.", file, TRUE);
+                handleFatalError("Link layer error: Failed to read from the link.\n", file, TRUE);
                 return;
             }
 
             if (buf[0] == C_START || buf[0] == C_END) {
                 if (readCtrl(buf) == -1) {
-                    handleFatalError("Packet error: Failed to read control packet.", file, TRUE);
+                    handleFatalError("Packet error: Failed to read control packet.\n", file, TRUE);
                     return;
                 }
             } else if (buf[0] == DATA) {
@@ -217,7 +217,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
                 size_t dataSize;
                 unsigned char *packet = readData(buf, &dataSize);
                 if (!packet) {
-                    handleFatalError("Packet error: Failed to read data packet.", file, TRUE);
+                    handleFatalError("Packet error: Failed to read data packet.\n", file, TRUE);
                     return;
                 }
                 fwrite(packet, 1, dataSize, file);
@@ -231,6 +231,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
     }
 
     if (llclose(TRUE) == -1) {
-        handleError("Link layer error: Failed to close the connection.");
+        handleError("Link layer error: Failed to close the connection.\n");
     }
 }
