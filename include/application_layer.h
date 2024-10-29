@@ -11,9 +11,9 @@
 #define T_FILENAME 1
 #define MAX_PACKET_SIZE MAX_PAYLOAD_SIZE+5
 enum state {
-    TRANF_START,
-    TRANF_DATA,
-    TRANF_END
+    APPLICATION_START,
+    APPLICATION_DATA,
+    APPLICATION_END
 };
 
 // Application layer main function.
