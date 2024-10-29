@@ -2,6 +2,7 @@
 
 #include "link_layer.h"
 #include "serial_port.h"
+#include <sys/time.h>
 
 #define BUFFER_SIZE 256
 // MISC
@@ -15,10 +16,20 @@ int lastSeqNumber = -1;
 int time_out=0;
 int retraNum=0;
 int role=0;
+
+extern int framesSent;
+extern int framesRead;
+extern struct timeval programStart, programEnd;
+extern int totalAlarms;
+extern int totalRejs;
+extern int totalRRs;
+extern int totalDups;
+
 void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
     alarmCount++;
+    totalAlarms++;
 
     if (alarmCount < 3) printf("Retry #%d\n", alarmCount);
     else printf("Max retries reached\n");
@@ -36,6 +47,7 @@ int llopen(LinkLayer connectionParameters)
     {
         return -1;
     }
+
     State state = START;
     unsigned char buf_[BUFFER_SIZE + 1] = {0};
     retraNum = connectionParameters.nRetransmissions;
@@ -101,6 +113,7 @@ int llopen(LinkLayer connectionParameters)
         sendSFrame(CONTROL_UA);
     }
     if(alarmCount == retraNum ) return -1;
+    printf("\nConnection opened successfully.\n");
     return 0;
 }
 
@@ -194,6 +207,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     while(alarmCount < retraNum){ // VOU TENTAR ESCREVER X VEZES
             if(alarmEnabled == FALSE){
                 int res = writeBytes(infoFrame, index+1); //ESCREVO
+                framesSent++;
                 alarmEnabled=TRUE; //ATIVO ALARME
                 alarm(time_out);
                 if( res == -1){
@@ -222,11 +236,8 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
     int i = 0;
     State state = START;
 
-    printf("Reading...\n");
-
     while (state != STOP_STATE) {  
         if (readByte(&c) > 0) {
-            printf("bytes is %x\n",c);
             switch (state) {
                 case START:
                     if (c == FLAG) {
@@ -252,6 +263,8 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                         if (seqNumber == lastSeqNumber) {
                             printf("Received frame with same sequence number\n");
                             if (sendSFrame(!lastSeqNumber ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response (duplicate)\n");
+                            totalDups++;
+                            framesRead++;
                             return 0;
                         }
                     } else if (c == CONTROL_SET){ // ESTE E O CASO EM QUE HOUVE ERRO NO MEU UA
@@ -291,6 +304,8 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                         if (bcc2 == acc) {
                             state = STOP_STATE;
                             if (sendSFrame(nr ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response\n");
+                            totalRRs++;
+                            framesRead++;
 
                             lastSeqNumber = (control >> 6) & 0x01;
                             nr = (nr + 1) % 2;
@@ -298,6 +313,9 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                         } else {
                             printf("Error: retransmission required\n");
                             if (sendSFrame(nr ? CONTROL_REJ0 : CONTROL_REJ1)) printf("Sent REJ response\n");
+                            totalRejs++;
+                            framesRead++;
+
                             state = START;
                             memset(packet,i,0);
                             i=0;
@@ -480,8 +498,34 @@ int llclose(int showStatistics)
 
             }
     }
+
     int clstat = closeSerialPort();
     if (clstat != -1) printf("Connection terminated successfully.\n");
+
+    if (showStatistics) {
+        printf("\n\nStatistics:\n\n");
+
+        if (role == LlRx)
+            printf("Role: Receiver \n");
+        else
+            printf("Role: Transmiter \n");
+
+        if (role == LlTx)
+        {
+            printf("Frames sent: %d\n", framesSent);
+            printf("Total number of alarms: %d\n", totalAlarms);
+        }
+        else
+        {
+            printf("Frames read: %d\n", framesRead);
+            printf("Number of accepted frames: %d\n", totalRRs);
+            printf("Number of rejected frames: %d\n", totalRejs);
+            printf("Number of duplicate frames: %d\n", totalDups);
+        }
+
+        double elapsed_time = (programEnd.tv_sec - programStart.tv_sec) + (programEnd.tv_usec - programStart.tv_usec) / 1e6;
+        printf("Total time: %g seconds\n", elapsed_time);
+    }
 
     return clstat;
 }

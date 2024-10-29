@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #define DATA 2
 #define C_START 1
@@ -24,6 +25,14 @@ typedef struct {
 
 static enum state stateReceive = TRANF_START;
 static props mypros = {0, "", 0, 0, 0}; // Initialize sequence number and expected sequence number to 0
+
+int framesSent = 0;
+int framesRead = 0;
+struct timeval programStart, programEnd;
+int totalAlarms = 0;
+int totalRejs = 0;
+int totalRRs = 0;
+int totalDups = 0;
 
 
 static void handleError(const char *msg) {
@@ -136,6 +145,9 @@ int readCtrl(unsigned char *buf) {
 }
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate, int nTries, int timeout, const char *filename) {
+
+    gettimeofday(&programStart, NULL);
+
     LinkLayer l = {
         .role = strcmp(role, "tx") ? LlRx : LlTx,
         .baudRate = baudRate,
@@ -150,7 +162,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
     }
 
     if (l.role == LlTx) {
-        printf("olaola\n");
         unsigned char buffer[MAX_PACKET_SIZE];
         FILE *file = fopen(filename, "rb");
         if (!file) {
@@ -229,6 +240,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate, in
 
         fclose(file);
     }
+
+    gettimeofday(&programEnd, NULL);
 
     if (llclose(TRUE) == -1) {
         handleError("Link layer error: Failed to close the connection.\n");
