@@ -172,6 +172,7 @@ int checkCF(){
 
 int llwrite(const unsigned char *buf, int bufSize)
 {
+    printf("Writing %d bytes\n", bufSize);
     unsigned char infoFrame [4+ bufSize * 2 + 2]; //4 BYTES FOR FIRST HEADER THE THE FRAME TIMES 2 TO ACCOUNT FOR STUFFING THEN 2 FOR HEADER 2
     infoFrame[0] = FLAG;
     infoFrame[1] = ADDRESS_T;
