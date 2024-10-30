@@ -224,7 +224,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     return;
                 }
             }
-           else if (buffer[0] == DATA) {
+            else if (buffer[0] == DATA) {
                 unsigned int data_size;
                 unsigned char data[MAX_PAYLOAD_SIZE]; // Buffer to hold extracted data
                 int result = read_data_packet(buffer, data, &data_size);
@@ -266,7 +266,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         while ((mypros.bytesRead < file_size)) {
             size_t bytesRead = fread(buffer, 1, MAX_PAYLOAD_SIZE, file);
             if (bytesRead > 0) {
-                send_data_packet(bytesRead, buffer);
+                if (send_data_packet(bytesRead, buffer) < 0) {
+                    handleFatalError("Failed to send data packet\n", file, TRUE);
+                    return;
+                }
                 mypros.bytesRead += bytesRead;
             } else {
                 handleFatalError("File error: Error reading file data.\n", file, TRUE);
