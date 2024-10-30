@@ -269,7 +269,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     if (c == 0 || c == (1 << 7)) {
                         state = C_RCV;
                         control = c;
-                        int seqNumber = (control >> 6) & 0x01;
+                        int seqNumber = (control >> 7) & 0x01;
                         if (seqNumber == lastSeqNumber) {
                             printf("Received frame with same sequence number\n");
                             if (sendSFrame(!lastSeqNumber ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response (duplicate)\n");
@@ -317,7 +317,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             totalRRs++;
                             framesRead++;
 
-                            lastSeqNumber = (control >> 6) & 0x01;
+                            lastSeqNumber = (control >> 7) & 0x01;
                             nr = (nr + 1) % 2;
                             return i; 
                         } else {
