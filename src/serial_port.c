@@ -121,5 +121,6 @@ int readByte(char *byte)
 // Returns -1 on error, otherwise the number of bytes written.
 int writeBytes(const char *bytes, int numBytes)
 {
+
     return write(fd, bytes, numBytes);
 }

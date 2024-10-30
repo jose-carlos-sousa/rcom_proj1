@@ -28,6 +28,9 @@ extern int totalRejs;
 extern int totalRRs;
 extern int totalDups;
 
+void state_machine(State *state){
+
+}
 void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
@@ -37,7 +40,103 @@ void alarmHandler(int signal)
     if (alarmCount < 3) printf("Retry #%d\n", alarmCount);
     else printf("Max retries reached\n");
 }
+int send_and_wait( unsigned int control_send, unsigned int control_recieve){
+        alarmCount=0; //inicializar alarm count para 0
+        while(alarmCount < retraNum){ //enquanto não exeder o numero de alarm count 
+            sendSFrame(control_send);
+            alarm(time_out);
+            alarmEnabled = TRUE; // Ativamos o alarme
+            State state = START; //Colocar no estado inicial
+            char c =0;
+            while(state != STOP_STATE && alarmEnabled){ //Enquanto não chegar ao estado final e o alarme não apitar
+                if ( readByte(&c) > 0) {
+                    switch (state) {
+                        case (START):
+                            if (c == FLAG) {
+                                state = FLAG_RCV;
+                            }
+                            break;
+                        case (FLAG_RCV):
+                            if (c == ADDRESS_T) {
+                                state = A_RCV;
+                                }
+                            else if (c == FLAG) break;
+                            else state = START;
+                            break;
+                        case (A_RCV):
+                            if (c == control_recieve ) {
+                                state = C_RCV;
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (C_RCV):
+                            if (c == ADDRESS_T ^ CONTROL_DISC) {
+                                state = BCC_OK;
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (BCC_OK):
+                            if (c == FLAG) {
+                                state = STOP_STATE;
+                                alarmEnabled=FALSE;
+                                return 0; //Posso parar se tive sucesso
+                                }
+                            else state = START;
+                            break;
+                    }
+                }
+            }
 
+        }
+        return -1;
+}
+
+int only_wait (unsigned int control_recieve){
+     State state = START; //Colocar no estado inicial
+     char c;
+     while(state != STOP_STATE ){
+                if ( readByte(&c) >0) {
+                    switch (state) {
+                        case (START):
+                            if (c == FLAG) {
+                                state = FLAG_RCV;
+                            }
+                            break;
+                        case (FLAG_RCV):
+                            if (c == ADDRESS_T) {
+                                state = A_RCV;
+                                }
+                            else if (c == FLAG) break;
+                            else state = START;
+                            break;
+                        case (A_RCV):
+                            if (c == control_recieve) {
+                                state = C_RCV;
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (C_RCV):
+                            if (c == ADDRESS_T ^ CONTROL_DISC) {
+                                state = BCC_OK;
+                                }
+                            else if (c == FLAG) state = FLAG_RCV;
+                            else state = START;
+                            break;
+                        case (BCC_OK):
+                            if (c == FLAG) {
+                                state = STOP_STATE;
+                                return 0;
+                                }
+                            else state = START;
+                            break;
+                    }
+                }
+            }
+    return -1; //This shouldn't be possible but anyway...
+}
 ////////////////////////////////////////////////
 // LLOPEN
 ////////////////////////////////////////////////
@@ -56,67 +155,16 @@ int llopen(LinkLayer connectionParameters)
     retraNum = connectionParameters.nRetransmissions;
     time_out = connectionParameters.timeout;
     role=connectionParameters.role;
-    while (state != STOP_STATE && alarmCount < retraNum)
-    {
-        if (alarmEnabled == FALSE && connectionParameters.role == LlTx)
-        {
-            sendSFrame(CONTROL_SET);
-            alarm(3);
-            alarmEnabled = TRUE;
-        }
-        int control = 0;
-        if(connectionParameters.role == LlTx) {
-            control = CONTROL_UA;
-        }
-        else {
-            control = CONTROL_SET;
-        }
-        int r =readByte((unsigned char *)buf_);
-        if( r > 0){
-            switch (state)
-            {
-            case (START):
-                if (buf_[0] == FLAG) {
-                    state = FLAG_RCV;
-                }
-                break;
-            case (FLAG_RCV):
-                if (buf_[0] == ADDRESS_T) {
-                    state = A_RCV;
-                    }
-                else if (buf_[0] == FLAG) break;
-                else state = START;
-                break;
-            case (A_RCV):
-                if (buf_[0] == control) {
-                    state = C_RCV;
-                    }
-                else if (buf_[0] == FLAG) state = FLAG_RCV;
-                else state = START;
-                break;
-            case (C_RCV):
-                if (buf_[0] == ADDRESS_T^control) {
-                    state = BCC_OK;
-                    }
-                else if (buf_[0] == FLAG) state = FLAG_RCV;
-                else state = START;
-                break;
-            case (BCC_OK):
-                if (buf_[0] == FLAG) {
-                    state = STOP_STATE;
-                    alarm(0);
-                    }
-                else state = START;
-                break;
-            }
+    if(connectionParameters.role ==LlTx){
+        if(send_and_wait(CONTROL_SET, CONTROL_UA)==-1)return -1;
+        printf("senr    \n");
     }
-        }
-        
-    if (connectionParameters.role == LlRx) {
-        sendSFrame(CONTROL_UA);
+    else if (connectionParameters.role == LlRx) {
+        printf("will wait   \n");
+        if(only_wait(CONTROL_SET)==-1)return -1;
+        printf("waited now gonna send\n");
+        if(sendSFrame(CONTROL_UA)==-1) return -1;
     }
-    if(alarmCount == retraNum ) return -1;
-    printf("\nConnection opened successfully.\n");
     return 0;
 }
 
@@ -269,7 +317,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     if (c == 0 || c == (1 << 7)) {
                         state = C_RCV;
                         control = c;
-                        int seqNumber = (control >> 6) & 0x01;
+                        int seqNumber = (control >> 7) & 0x01;
                         if (seqNumber == lastSeqNumber) {
                             printf("Received frame with same sequence number\n");
                             if (sendSFrame(!lastSeqNumber ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response (duplicate)\n");
@@ -317,7 +365,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             totalRRs++;
                             framesRead++;
 
-                            lastSeqNumber = (control >> 6) & 0x01;
+                            lastSeqNumber = (control >> 7) & 0x01;
                             nr = (nr + 1) % 2;
                             return i; 
                         } else {
@@ -360,153 +408,15 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 ////////////////////////////////////////////////
 int llclose(int showStatistics)
 {
-    // TODO
-    alarmCount=0;
+   
     int sucess=0;
     if (role==LlTx){ // SE EU FOR TRASNMISSOE
-        while(alarmCount < retraNum && !sucess){
-            sendSFrame(CONTROL_DISC);
-            alarm(time_out);
-            alarmEnabled = TRUE;
-            State state = START;
-            char c =0;
-            while(state != STOP_STATE && alarmEnabled){
-                if ( readByte(&c) > 0) {
-                    switch (state) {
-                        case (START):
-                            if (c == FLAG) {
-                                state = FLAG_RCV;
-                            }
-                            break;
-                        case (FLAG_RCV):
-                            if (c == ADDRESS_T) {
-                                state = A_RCV;
-                                }
-                            else if (c == FLAG) break;
-                            else state = START;
-                            break;
-                        case (A_RCV):
-                            if (c == CONTROL_DISC ) {
-                                state = C_RCV;
-                                }
-                            else if (c == FLAG) state = FLAG_RCV;
-                            else state = START;
-                            break;
-                        case (C_RCV):
-                            if (c == ADDRESS_T ^ CONTROL_DISC) {
-                                state = BCC_OK;
-                                }
-                            else if (c == FLAG) state = FLAG_RCV;
-                            else state = START;
-                            break;
-                        case (BCC_OK):
-                            if (c == FLAG) {
-                                state = STOP_STATE;
-                                alarm(0);
-                                alarmEnabled=FALSE;
-                                sucess=1;
-                                }
-                            else state = START;
-                            break;
-                    }
-                }
-            }
-
-        }
-     //SEND UA
-    sendSFrame(CONTROL_UA);
+        if(send_and_wait(CONTROL_DISC,CONTROL_DISC)==-1)return -1;
+        sendSFrame(CONTROL_UA);
 
     }else if(role==LlRx){ // SE EU FOR RECETOR
-                State state =START;
-                char c =0;
-                while(state != STOP_STATE ){
-                if ( readByte(&c) >0) {
-                    switch (state) {
-                        case (START):
-                            if (c == FLAG) {
-                                state = FLAG_RCV;
-                            }
-                            break;
-                        case (FLAG_RCV):
-                            if (c == ADDRESS_T) {
-                                state = A_RCV;
-                                }
-                            else if (c == FLAG) break;
-                            else state = START;
-                            break;
-                        case (A_RCV):
-                            if (c == CONTROL_DISC ) {
-                                state = C_RCV;
-                                }
-                            else if (c == FLAG) state = FLAG_RCV;
-                            else state = START;
-                            break;
-                        case (C_RCV):
-                            if (c == ADDRESS_T ^ CONTROL_DISC) {
-                                state = BCC_OK;
-                                }
-                            else if (c == FLAG) state = FLAG_RCV;
-                            else state = START;
-                            break;
-                        case (BCC_OK):
-                            if (c == FLAG) {
-                                state = STOP_STATE;
-                                }
-                            else state = START;
-                            break;
-                    }
-                }
-            }
-            while(alarmCount < retraNum && !sucess){
-                sendSFrame(CONTROL_DISC);
-                alarm(time_out);
-                alarmEnabled = TRUE;
-                State state = START;
-                char c = 0;
-                while(state != STOP_STATE && alarmEnabled) {
-                    if ( readByte(&c) > 0) {
-                        switch (state) {
-                            case (START):
-                                if (c == FLAG) {
-                                    state = FLAG_RCV;
-                                }
-                                break;
-                            case (FLAG_RCV):
-                                if (c == ADDRESS_T) {
-                                    state = A_RCV;
-                                    }
-                                else if (c == FLAG) break;
-                                else state = START;
-                                break;
-                            case (A_RCV):
-                                if (c == CONTROL_UA ) {
-                                    state = C_RCV;
-                                    }
-                                else if (c == FLAG) state = FLAG_RCV;
-                                else state = START;
-                                break;
-                            case (C_RCV):
-                                if (c == ADDRESS_T ^ CONTROL_UA) {
-                                    state = BCC_OK;
-
-                                    }
-                                else if (c == FLAG) state = FLAG_RCV;
-                                else state = START;
-                                break;
-                            case (BCC_OK):
-                                if (c == FLAG) {
-                                    state = STOP_STATE;
-                                    alarm(0);
-                                    alarmEnabled=FALSE;
-                                    sucess=1;
-                                    }
-                                else state = START;
-                                break;
-                        }
-                    }
-                }
-
-            }
+            if(only_wait(CONTROL_DISC)==-1) return -1;
+            if(send_and_wait(CONTROL_DISC,CONTROL_UA)==-1) return -1;
     }
 
     int clstat = closeSerialPort();
@@ -546,7 +456,7 @@ int llclose(int showStatistics)
     return clstat;
 }
 
-int sendSFrame(int control){
+int sendSFrame(unsigned int control){
     unsigned char buf[5] = {0};
     buf[0] = FLAG;
     buf[1] = ADDRESS_T;
