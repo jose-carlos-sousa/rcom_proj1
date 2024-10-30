@@ -19,6 +19,9 @@ int role=0;
 
 extern int framesSent;
 extern int framesRead;
+extern int originalSize;
+extern int newSize;
+extern int fileSize;
 extern struct timeval programStart, programEnd;
 extern int totalAlarms;
 extern int totalRejs;
@@ -173,6 +176,8 @@ int checkCF(){
 int llwrite(const unsigned char *buf, int bufSize)
 {
     printf("Writing %d bytes\n", bufSize);
+    originalSize += bufSize;
+    newSize += bufSize;
     unsigned char infoFrame [4+ bufSize * 2 + 2]; //4 BYTES FOR FIRST HEADER THE THE FRAME TIMES 2 TO ACCOUNT FOR STUFFING THEN 2 FOR HEADER 2
     infoFrame[0] = FLAG;
     infoFrame[1] = ADDRESS_T;
@@ -185,9 +190,11 @@ int llwrite(const unsigned char *buf, int bufSize)
         if ( buf[i] == FLAG){
             infoFrame[index++] = ESCAPE;
             infoFrame[index++] = MOD_FLAG;
+            newSize++;
         }else if ( buf[i] == ESCAPE){
             infoFrame[index++] = ESCAPE;
             infoFrame[index++] = MOD_ESCAPE;
+            newSize++;
         }else {
             infoFrame[index++] = buf[i];
         }
@@ -217,9 +224,11 @@ int llwrite(const unsigned char *buf, int bufSize)
             }
             int control = checkCF(); // VOU VER SE O GAJO DISSE QUE RECEBEU
             if(control == CONTROL_REJ0 || control == CONTROL_REJ1) {
+                totalRejs++;
                 printf("Frame rejected :(\n");
             }
             else if((control == CONTROL_RR0 && ns == 1) || (control == CONTROL_RR1) && ns == 0) {
+                totalRRs++;
                 printf("Frame accepted\n");
                 ns = (ns+1) % 2; //meto que agr vou para o outro
                 return 0; //bazo
@@ -514,7 +523,13 @@ int llclose(int showStatistics)
         if (role == LlTx)
         {
             printf("Frames sent: %d\n", framesSent);
-            printf("Total number of alarms: %d\n", totalAlarms);
+            printf("File size: %d bytes\n", fileSize);
+            printf("Original data size: %d bytes\n", originalSize);
+            printf("Data size w/ stuffing: %d bytes\n", newSize);
+            printf("Number of bytes stuffed: %d\n", newSize - originalSize);
+            printf("Average data size per frame: %g bytes\n", (double)originalSize / totalRRs);
+            printf("Average data size per frame w/ stuffing: %g bytes\n", (double)newSize / totalRRs);
+            printf("Total number of timeouts: %d\n", totalAlarms);
         }
         else
         {

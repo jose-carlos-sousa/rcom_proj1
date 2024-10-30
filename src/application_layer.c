@@ -28,6 +28,9 @@ static props mypros = {0, "", 0, 0, 0}; // Initialize sequence number and expect
 
 int framesSent = 0;
 int framesRead = 0;
+int originalSize = 0;
+int newSize = 0;
+int fileSize = 0;
 struct timeval programStart, programEnd;
 int totalAlarms = 0;
 int totalRejs = 0;
@@ -253,6 +256,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             return;
         }
         size_t file_size = fileStat.st_size;
+        fileSize = file_size;
 
         if (send_control_package(C_START, file_size, filename) == -1) {
             handleFatalError("Failed to send control package (C_START)\n", file, TRUE);
