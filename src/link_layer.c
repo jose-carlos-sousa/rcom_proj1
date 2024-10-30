@@ -345,13 +345,13 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     break;
                 default:
                     printf("Unknown state encountered\n");
-                    break;
+                    return -1;
             }
         }
     }
 
-    printf("Exiting llread function\n");
-    return 0;
+    printf("Exiting llread function\n"); //shouldn't reach this point
+    return -1;
 }
 
 
