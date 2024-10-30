@@ -181,7 +181,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     unsigned char infoFrame [4+ bufSize * 2 + 2]; //4 BYTES FOR FIRST HEADER THE THE FRAME TIMES 2 TO ACCOUNT FOR STUFFING THEN 2 FOR HEADER 2
     infoFrame[0] = FLAG;
     infoFrame[1] = ADDRESS_T;
-    infoFrame[2] = ns << 6;
+    infoFrame[2] = ns << 7;
     infoFrame[3] = infoFrame[1] ^ infoFrame[2];
     int index = 4;
     unsigned char bcc2 = 0;
@@ -266,7 +266,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     break;
 
                 case A_RCV:
-                    if (c == 0 || c == (1 << 6)) {
+                    if (c == 0 || c == (1 << 7)) {
                         state = C_RCV;
                         control = c;
                         int seqNumber = (control >> 6) & 0x01;
