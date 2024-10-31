@@ -153,8 +153,7 @@ int read_data_packet(const unsigned char *packet, unsigned char *data_buffer, un
     *data_size = (l2 << 8) | l1; 
 
     if (sequence_number != mypros.expected_sequence_number) {
-        handleFatalError("Sequence number mismatch\n", NULL, TRUE);
-        return -1;
+        printf("Sequence number mismatch\n");
     }
 
     

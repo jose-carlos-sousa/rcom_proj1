@@ -71,7 +71,7 @@ int send_and_wait( unsigned int control_send, unsigned int control_recieve){
                             else state = START;
                             break;
                         case (C_RCV):
-                            if (c == ADDRESS_T ^ CONTROL_DISC) {
+                            if (c == ADDRESS_T ^ control_recieve) {
                                 state = BCC_OK;
                                 }
                             else if (c == FLAG) state = FLAG_RCV;
@@ -119,7 +119,7 @@ int only_wait (unsigned int control_recieve){
                             else state = START;
                             break;
                         case (C_RCV):
-                            if (c == ADDRESS_T ^ CONTROL_DISC) {
+                            if (c == ADDRESS_T ^ control_recieve) {
                                 state = BCC_OK;
                                 }
                             else if (c == FLAG) state = FLAG_RCV;
