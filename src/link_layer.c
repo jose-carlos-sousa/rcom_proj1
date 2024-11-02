@@ -35,7 +35,7 @@ int sendSFrame(unsigned int control){
     buf[3] = buf[1] ^ buf[2];
     buf[4] = FLAG;
 
-    return writeBytes(buf, 5);
+    return writeBytes((const char *)buf, 5);
 }
 
 void alarmHandler(int signal)
@@ -56,7 +56,7 @@ int send_and_wait( unsigned int control_send, unsigned int control_recieve){
             State state = START;                    //Colocar no estado inicial
             char c =0;
             while(state != STOP_STATE && alarmEnabled){ //Enquanto não chegar ao estado final e o alarme não apitar
-                if ( readByte(&c) > 0) {
+                if ( readByte((char *)&c) > 0) {
                     switch (state) {
                         case (START):
                             if (c == FLAG) {
@@ -92,6 +92,8 @@ int send_and_wait( unsigned int control_send, unsigned int control_recieve){
                                 }
                             else state = START;
                             break;
+                        default:
+                            break;
                     }
                 }
             }
@@ -104,7 +106,7 @@ int only_wait (unsigned int control_recieve){
      State state = START;                           //Colocar no estado inicial
      char c;
      while(state != STOP_STATE ){
-                if ( readByte(&c) >0) {
+                if ( readByte(( char *)&c) >0) {
                     switch (state) {
                         case (START):
                             if (c == FLAG) {
@@ -139,6 +141,8 @@ int only_wait (unsigned int control_recieve){
                                 }
                             else state = START;
                             break;
+                        default:
+                            break;
                     }
                 }
             }
@@ -157,8 +161,6 @@ int llopen(LinkLayer connectionParameters)
         return -1;
     }
 
-    State state = START;
-    unsigned char buf_[BUFFER_SIZE + 1] = {0};
     retraNum = connectionParameters.nRetransmissions;
     time_out = connectionParameters.timeout;
     role=connectionParameters.role;
@@ -179,11 +181,11 @@ int llopen(LinkLayer connectionParameters)
 
 int checkCF(){
 
-    unsigned char byte, control = 0;
+    unsigned char  control = 0;
     State state = START;
     unsigned char c;
     while(state != STOP_STATE && alarmEnabled ){
-        if ( readByte(&c) >0) {
+        if ( readByte((char *)&c) >0) {
             switch (state) {
                 case (START):
                     if (c == FLAG) {
@@ -206,7 +208,7 @@ int checkCF(){
                     else state = START;
                     break;
                 case (C_RCV):
-                    if (c == ADDRESS_T ^ control) {
+                    if (c == (ADDRESS_T ^ control)) {
                         state = BCC_OK;
                         }
                     else if (c == FLAG) state = FLAG_RCV;
@@ -219,6 +221,8 @@ int checkCF(){
                         alarmEnabled=FALSE;
                         }
                     else state = START;
+                    break;
+                default:
                     break;
             }
         }
@@ -267,7 +271,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     alarmEnabled=FALSE;
     while(alarmCount < retraNum){ // vou tentar escrever x vezes
             if(alarmEnabled == FALSE){
-                int res = writeBytes(infoFrame, index+1); //escrevo
+                int res = writeBytes((const char *)infoFrame, index+1); //escrevo
                 framesSent++;
                 alarmEnabled=TRUE; //ativo alarme
                 alarm(time_out);
@@ -281,7 +285,7 @@ int llwrite(const unsigned char *buf, int bufSize)
                 printf("Frame rejected :(\n");
                 alarmCount=0;
             }
-            else if((control == CONTROL_RR0 && ns == 1) || (control == CONTROL_RR1) && ns == 0) {
+            else if((((control == CONTROL_RR0) && (ns == 1)) )|| ((control == CONTROL_RR1) && (ns == 0))) {
                 totalRRs++;
                 printf("Frame accepted\n");
                 alarmCount=0;
@@ -302,7 +306,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
     State state = START;
 
     while (state != STOP_STATE) {  
-        if (readByte(&c) > 0) {
+        if (readByte((char *)&c) > 0) {
             switch (state) {
                 case START:
                     if (c == FLAG) {
@@ -382,7 +386,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             framesRead++;
 
                             state = START;
-                            memset(packet,i,0);
+                            bzero(packet,i);
                             i=0;
                         }
                     } else {
@@ -415,8 +419,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 ////////////////////////////////////////////////
 int llclose(int showStatistics)
 {
-   
-    int sucess=0;
+
     if (role==LlTx){ //se for o transmissor
         if(send_and_wait(CONTROL_DISC,CONTROL_DISC)==-1)return -1;
         sendSFrame(CONTROL_UA);

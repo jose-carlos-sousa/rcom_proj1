@@ -6,23 +6,9 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
-#define DATA 2
-#define C_START 1
-#define C_END 3
-#define T_FILESIZE 0
-#define T_FILENAME 1
-#define MAX_FILE_NAME 50
-
-typedef struct {
-    size_t file_size;
-    char file_name[MAX_FILE_NAME];
-    size_t bytesRead;
-    unsigned char sequence_number;
-    unsigned char expected_sequence_number; 
-} props;
 
 
-static enum state stateReceive = APPLICATION_START;
+static enum state recvState = APPLICATION_START;
 static props mypros = {0, "", 0, 0, 0};
 
 int framesSent = 0;
@@ -39,13 +25,13 @@ int totalDups = 0;
 
 // Função para dar handle a erros fatais
 static void handleFatalError(const char *msg, FILE *file, int closeLinkLayer) {
-     perror(msg);
     if (file) {
         fclose(file);
     }
+    printf("%s", msg);
 }
 
-int send_control_package(unsigned char control, size_t file_size, const char *file_name) {
+int send_control_package(unsigned char control, unsigned int file_size, const char *file_name) {
     if (file_name == NULL) {
         return -1;
     }   
@@ -55,7 +41,7 @@ int send_control_package(unsigned char control, size_t file_size, const char *fi
     packet[1] = T_FILESIZE;
 
     unsigned char size_bytes = 0;
-    size_t size_copy = file_size;
+    unsigned int size_copy = file_size;
     do {
         size_copy /= 256;
         size_bytes++;
@@ -91,10 +77,10 @@ int send_control_package(unsigned char control, size_t file_size, const char *fi
 int read_control_package(const unsigned char *control_buffer) {
     if (control_buffer == NULL) return -1;
 
-    if (control_buffer[0] == C_START) 
-        stateReceive = APPLICATION_START;
-    else if (control_buffer[0] == C_END) 
-        stateReceive = APPLICATION_END;
+    if (control_buffer[0] == CTRL_START) 
+        recvState = APPLICATION_START;
+    else if (control_buffer[0] == CTRL_END) 
+        recvState = APPLICATION_END;
     else 
         return -1;
 
@@ -117,11 +103,11 @@ int read_control_package(const unsigned char *control_buffer) {
         return -1; 
     }
 
-    if (control_buffer[0] == C_START) {
+    if (control_buffer[0] == CTRL_START) {
         mypros.file_size = file_size;
         mypros.bytesRead = 0; 
     } 
-    else if (control_buffer[0] == C_END) {
+    else if (control_buffer[0] == CTRL_END) {
         if (mypros.file_size != mypros.bytesRead) {
             handleFatalError("File size mismatch\n", NULL, TRUE);
             return -1;
@@ -145,7 +131,6 @@ int read_data_packet(const unsigned char *packet, unsigned char *data_buffer, un
         return -1;
     }
 
-
     unsigned int sequence_number = packet[1];
     unsigned int l2 = packet[2];
     unsigned int l1 = packet[3];
@@ -166,11 +151,11 @@ int read_data_packet(const unsigned char *packet, unsigned char *data_buffer, un
 }
 
 
-int send_data_packet(size_t nBytes, unsigned char *data) {
+int send_data_packet(unsigned int nBytes, unsigned char *data) {
     if (data == NULL) return -1;
 
     unsigned char packet[MAX_PACKET_SIZE];
-    packet[0] = DATA;
+    packet[0] = CTRL_DATA;
     packet[1] = mypros.sequence_number; 
     packet[2] = nBytes / 256;
     packet[3] = nBytes % 256;
@@ -197,72 +182,83 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     FILE *file; 
 
     if (llopen(l) == -1) {
-        handleFatalError("Link layer error: Failed to open the connection.\n", NULL, FALSE);
+        handleFatalError("Error opening the connection in the link layer.\n", NULL, FALSE);
         return;
     }
 
     if(l.role == LlRx) {
-        stateReceive = APPLICATION_START;
+        recvState = APPLICATION_START;
         file = fopen(filename,"wb");
         if (file == NULL) {
-            handleFatalError("Error opening file for writing\n", NULL, TRUE);
+            handleFatalError("Failed to open file in writing mode\n", NULL, TRUE);
             return;
         }
 
         unsigned char buffer[MAX_PAYLOAD_SIZE] = {0};
-        while (stateReceive != APPLICATION_END) {
+        while (recvState != APPLICATION_END) {
             int bytes_read = llread(buffer);
             if (bytes_read == -1) {
-                handleFatalError("Link layer error: Failed to read from the link.\n", file, TRUE);
+                handleFatalError("Failed to read buffer in the link layer.\n", file, TRUE);
                 return;
             }
-            else if (buffer[0] == C_START || buffer[0] == C_END) {
-                if (read_control_package(buffer) == -1) {
-                    handleFatalError("Failed to read control package.\n", file, TRUE);
-                    return;
-                }
-            }
-            else if (buffer[0] == DATA) {
-                unsigned int data_size;
-                unsigned char data[MAX_PAYLOAD_SIZE]; //buffer para a data lida
-                int result = read_data_packet(buffer, data, &data_size);
-                
-                if (result == -1) {
-                    handleFatalError("Failed to read data packet\n", file, TRUE);
-                    return;
+            switch (buffer[0]) {
+                case CTRL_START:
+                case CTRL_END:
+                    if (read_control_package(buffer) == -1) {
+                        handleFatalError("Failed to read control package.\n", file, TRUE);
+                        return;
+                    }
+                    break;
+
+                case CTRL_DATA: {
+                    unsigned int data_size;
+                    unsigned char data[MAX_PAYLOAD_SIZE]; // buffer for the read data
+                    int result = read_data_packet(buffer, data, &data_size);
+                    
+                    if (result == -1) {
+                        handleFatalError("Failed to read data packet\n", file, TRUE);
+                        return;
+                    }
+
+                    unsigned int written = fwrite(data, 1, data_size, file); // write data to file
+                    if (written != data_size) {
+                        handleFatalError("Failed to write data to file.\n", file, TRUE);
+                        return;
+                    }
+                    mypros.bytesRead += data_size;
+                    mypros.expected_sequence_number = (mypros.expected_sequence_number + 1) % 256;
+                    break;
                 }
 
-                
-                fwrite(data, 1, data_size, file); //escrever a data no ficheiro
-                mypros.bytesRead += data_size;
-                mypros.expected_sequence_number = (mypros.expected_sequence_number + 1) % 256;
+                default:
+                    break;
             }
+
         }
         printf("File received successfully\n");
-        fclose(file);
     } else { // Transmitter
         unsigned char buffer[MAX_PACKET_SIZE] = {0};
         file = fopen(filename,"rb");
         if (!file) {
-            handleFatalError("File error: Unable to open the file for reading.\n", NULL, TRUE);
+            handleFatalError("Failed to open file in reading mode.\n", NULL, TRUE);
             return;
         }
         struct stat fileStat;
 
         if (stat(filename, &fileStat) < 0) {
-            handleFatalError("File error: Unable to get file size.\n", file, TRUE);
+            handleFatalError("Unable to get file size.\n", file, TRUE);
             return;
         }
-        size_t file_size = fileStat.st_size;
+        unsigned int file_size = fileStat.st_size;
         fileSize = file_size;
 
-        if (send_control_package(C_START, file_size, filename) == -1) {
-            handleFatalError("Failed to send control package (C_START)\n", file, TRUE);
+        if (send_control_package(CTRL_START, file_size, filename) == -1) {
+            handleFatalError("Failed to send control package (CTRL_START)\n", file, TRUE);
             return;
         }
 
         while ((mypros.bytesRead < file_size)) {
-            size_t bytesRead = fread(buffer, 1, MAX_PAYLOAD_SIZE, file);
+            unsigned int bytesRead = fread(buffer, 1, MAX_PAYLOAD_SIZE, file);
             if (bytesRead > 0) {
                 if (send_data_packet(bytesRead, buffer) < 0) {
                     handleFatalError("Failed to send data packet\n", file, TRUE);
@@ -270,21 +266,21 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 }
                 mypros.bytesRead += bytesRead;
             } else {
-                handleFatalError("File error: Error reading file data.\n", file, TRUE);
+                handleFatalError("Error reading file data.\n", file, TRUE);
                 return;
             }
         }
 
-        if (send_control_package(C_END, mypros.bytesRead, filename) == -1) {
-            handleFatalError("Failed to send control package (C_END)\n", file, TRUE);
+        if (send_control_package(CTRL_END, mypros.bytesRead, filename) == -1) {
+            handleFatalError("Failed to send control package (CTRL_END)\n", file, TRUE);
             return;
         }
         printf("File sent successfully\n");
-        fclose(file);
     }
-     gettimeofday(&programEnd, NULL);
+    fclose(file);
+    gettimeofday(&programEnd, NULL);
     if (llclose(TRUE) == -1) {
-        handleFatalError("Link layer error: Failed to close the connection.\n", NULL, FALSE);
+        handleFatalError("Failed to close connection in link layer\n", NULL, FALSE);
         return;
     }
 
