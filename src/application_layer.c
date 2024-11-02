@@ -12,19 +12,18 @@
 #define T_FILESIZE 0
 #define T_FILENAME 1
 #define MAX_FILE_NAME 50
-#define MAX_PACKET_SIZE (MAX_PAYLOAD_SIZE + 6)
 
 typedef struct {
     size_t file_size;
     char file_name[MAX_FILE_NAME];
     size_t bytesRead;
-    unsigned char sequence_number; // Added sequence number
-    unsigned char expected_sequence_number; // Added expected sequence number
+    unsigned char sequence_number;
+    unsigned char expected_sequence_number; 
 } props;
 
 
 static enum state stateReceive = APPLICATION_START;
-static props mypros = {0, "", 0, 0, 0}; // Initialize sequence number and expected sequence number to 0
+static props mypros = {0, "", 0, 0, 0};
 
 int framesSent = 0;
 int framesRead = 0;
@@ -38,7 +37,7 @@ int totalRRs = 0;
 int totalDups = 0;
 
 
-// Centralized error handling function
+// Função para dar handle a erros fatais
 static void handleFatalError(const char *msg, FILE *file, int closeLinkLayer) {
      perror(msg);
     if (file) {
@@ -172,15 +171,15 @@ int send_data_packet(size_t nBytes, unsigned char *data) {
 
     unsigned char packet[MAX_PACKET_SIZE];
     packet[0] = DATA;
-    packet[1] = mypros.sequence_number; // Add sequence number
+    packet[1] = mypros.sequence_number; 
     packet[2] = nBytes / 256;
     packet[3] = nBytes % 256;
 
     memcpy(packet + 4, data, nBytes);
 
-    mypros.sequence_number = (mypros.sequence_number + 1) % 256; // Increment sequence number (wrap around)
+    mypros.sequence_number = (mypros.sequence_number + 1) % 256; // Incrementar numero de sequencia
 
-    return llwrite(packet, nBytes + 4); // Adjust size for sequence number
+    return llwrite(packet, nBytes + 4); 
 }
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
@@ -225,7 +224,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             }
             else if (buffer[0] == DATA) {
                 unsigned int data_size;
-                unsigned char data[MAX_PAYLOAD_SIZE]; // Buffer to hold extracted data
+                unsigned char data[MAX_PAYLOAD_SIZE]; //buffer para a data lida
                 int result = read_data_packet(buffer, data, &data_size);
                 
                 if (result == -1) {
@@ -233,8 +232,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     return;
                 }
 
-                // Write data to file
-                fwrite(data, 1, data_size, file);
+                
+                fwrite(data, 1, data_size, file); //escrever a data no ficheiro
                 mypros.bytesRead += data_size;
                 mypros.expected_sequence_number = (mypros.expected_sequence_number + 1) % 256;
             }

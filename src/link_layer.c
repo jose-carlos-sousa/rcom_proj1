@@ -5,7 +5,6 @@
 #include <sys/time.h>
 
 #define BUFFER_SIZE 256
-// MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 volatile int STOP = FALSE;
 int alarmEnabled = FALSE;
@@ -28,9 +27,17 @@ extern int totalRejs;
 extern int totalRRs;
 extern int totalDups;
 
-void state_machine(State *state){
+int sendSFrame(unsigned int control){
+    unsigned char buf[5] = {0};
+    buf[0] = FLAG;
+    buf[1] = ADDRESS_T;
+    buf[2] = control;
+    buf[3] = buf[1] ^ buf[2];
+    buf[4] = FLAG;
 
+    return writeBytes(buf, 5);
 }
+
 void alarmHandler(int signal)
 {
     alarmEnabled = FALSE;
@@ -41,12 +48,12 @@ void alarmHandler(int signal)
     else printf("Max retries reached\n");
 }
 int send_and_wait( unsigned int control_send, unsigned int control_recieve){
-        alarmCount=0; //inicializar alarm count para 0
-        while(alarmCount < retraNum){ //enquanto não exeder o numero de alarm count 
+        alarmCount=0;                               //inicializar alarm count para 0
+        while(alarmCount < retraNum){               //enquanto não exeder o numero de alarm count 
             sendSFrame(control_send);
             alarm(time_out);
-            alarmEnabled = TRUE; // Ativamos o alarme
-            State state = START; //Colocar no estado inicial
+            alarmEnabled = TRUE;                    // Ativamos o alarme
+            State state = START;                    //Colocar no estado inicial
             char c =0;
             while(state != STOP_STATE && alarmEnabled){ //Enquanto não chegar ao estado final e o alarme não apitar
                 if ( readByte(&c) > 0) {
@@ -71,7 +78,7 @@ int send_and_wait( unsigned int control_send, unsigned int control_recieve){
                             else state = START;
                             break;
                         case (C_RCV):
-                            if (c == ADDRESS_T ^ control_recieve) {
+                            if (c == (ADDRESS_T ^ control_recieve)) {
                                 state = BCC_OK;
                                 }
                             else if (c == FLAG) state = FLAG_RCV;
@@ -81,7 +88,7 @@ int send_and_wait( unsigned int control_send, unsigned int control_recieve){
                             if (c == FLAG) {
                                 state = STOP_STATE;
                                 alarmEnabled=FALSE;
-                                return 0; //Posso parar se tive sucesso
+                                return 0;               //Posso parar se tiver sucesso
                                 }
                             else state = START;
                             break;
@@ -94,7 +101,7 @@ int send_and_wait( unsigned int control_send, unsigned int control_recieve){
 }
 
 int only_wait (unsigned int control_recieve){
-     State state = START; //Colocar no estado inicial
+     State state = START;                           //Colocar no estado inicial
      char c;
      while(state != STOP_STATE ){
                 if ( readByte(&c) >0) {
@@ -119,7 +126,7 @@ int only_wait (unsigned int control_recieve){
                             else state = START;
                             break;
                         case (C_RCV):
-                            if (c == ADDRESS_T ^ control_recieve) {
+                            if (c == (ADDRESS_T ^ control_recieve)) {
                                 state = BCC_OK;
                                 }
                             else if (c == FLAG) state = FLAG_RCV;
@@ -135,7 +142,7 @@ int only_wait (unsigned int control_recieve){
                     }
                 }
             }
-    return -1; //This shouldn't be possible but anyway...
+    return -1; //Isto não devia acontecer
 }
 ////////////////////////////////////////////////
 // LLOPEN
@@ -157,12 +164,10 @@ int llopen(LinkLayer connectionParameters)
     role=connectionParameters.role;
     if(connectionParameters.role ==LlTx){
         if(send_and_wait(CONTROL_SET, CONTROL_UA)==-1)return -1;
-        printf("senr    \n");
     }
     else if (connectionParameters.role == LlRx) {
         printf("will wait   \n");
         if(only_wait(CONTROL_SET)==-1)return -1;
-        printf("waited now gonna send\n");
         if(sendSFrame(CONTROL_UA)==-1) return -1;
     }
     return 0;
@@ -224,9 +229,9 @@ int checkCF(){
 int llwrite(const unsigned char *buf, int bufSize)
 {
     printf("Writing %d bytes\n", bufSize);
-    originalSize += bufSize;
+    originalSize += bufSize; 
     newSize += bufSize;
-    unsigned char infoFrame [4+ bufSize * 2 + 2]; //4 BYTES FOR FIRST HEADER THE THE FRAME TIMES 2 TO ACCOUNT FOR STUFFING THEN 2 FOR HEADER 2
+    unsigned char infoFrame [4+ bufSize * 2 + 3]; //4 bytes para o primeiro header 2 * bufSize para a data com stuffing e 3 para a tail (stuffing bcc2)
     infoFrame[0] = FLAG;
     infoFrame[1] = ADDRESS_T;
     infoFrame[2] = ns << 7;
@@ -234,7 +239,7 @@ int llwrite(const unsigned char *buf, int bufSize)
     int index = 4;
     unsigned char bcc2 = 0;
 
-    for ( int i = 0 ; i < bufSize ; i++ ){ //meter a info no frame tudo direitinho com stuffing e tudo
+    for ( int i = 0 ; i < bufSize ; i++ ){ //meter a info no frame com stuffing e calcular o bcc2
         if ( buf[i] == FLAG){
             infoFrame[index++] = ESCAPE;
             infoFrame[index++] = MOD_FLAG;
@@ -260,26 +265,28 @@ int llwrite(const unsigned char *buf, int bufSize)
     infoFrame[++index]=FLAG;
     alarmCount = 0;
     alarmEnabled=FALSE;
-    while(alarmCount < retraNum){ // VOU TENTAR ESCREVER X VEZES
+    while(alarmCount < retraNum){ // vou tentar escrever x vezes
             if(alarmEnabled == FALSE){
-                int res = writeBytes(infoFrame, index+1); //ESCREVO
+                int res = writeBytes(infoFrame, index+1); //escrevo
                 framesSent++;
-                alarmEnabled=TRUE; //ATIVO ALARME
+                alarmEnabled=TRUE; //ativo alarme
                 alarm(time_out);
                 if( res == -1){
-                    printf(" it failed :(\n");
+                    printf("failed to write bytes\n");
                 }
             }
-            int control = checkCF(); // VOU VER SE O GAJO DISSE QUE RECEBEU
+            int control = checkCF(); // vou ver se receiver recebeu bem
             if(control == CONTROL_REJ0 || control == CONTROL_REJ1) {
                 totalRejs++;
                 printf("Frame rejected :(\n");
+                alarmCount=0;
             }
             else if((control == CONTROL_RR0 && ns == 1) || (control == CONTROL_RR1) && ns == 0) {
                 totalRRs++;
                 printf("Frame accepted\n");
-                ns = (ns+1) % 2; //meto que agr vou para o outro
-                return 0; //bazo
+                alarmCount=0;
+                ns = (ns+1) % 2; //alterno o ns para o proximo frame
+                return 0;
             }
     }
     return -1;
@@ -325,10 +332,10 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                             framesRead++;
                             return 0;
                         }
-                    } else if (c == CONTROL_SET){ // ESTE E O CASO EM QUE HOUVE ERRO NO MEU UA
+                    } else if (c == CONTROL_SET){ // este é caso em que houve erro no UA
                         sendSFrame(CONTROL_UA);
                         state = START;
-                    } else if (c == CONTROL_DISC){ // O TRANSMISSOR FOI PARA O LLCLOSE I GUESS
+                    } else if (c == CONTROL_DISC){ // o transmissor fechou a ligação
                         if (sendSFrame(CONTROL_DISC)) printf("Reading stopped abruptly, transmissor is closing the connection (what)\n");
                         return -1; 
                     } else if (c == FLAG) {
@@ -388,7 +395,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     if (c == MOD_ESCAPE || c == MOD_FLAG) {
                         packet[i++] = c == MOD_ESCAPE ? ESCAPE : FLAG;
                     } else {
-                       packet[i++] = c; //este erro vai ser detetado pelo bcc2 por isso no worries
+                       packet[i++] = c; //este erro vai ser detetado pelo bcc2
                     }
                     break;
                 default:
@@ -398,7 +405,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
         }
     }
 
-    printf("Exiting llread function\n"); //shouldn't reach this point
+    printf("Exiting llread function\n"); //isto não devia acontecer
     return 0;
 }
 
@@ -410,11 +417,11 @@ int llclose(int showStatistics)
 {
    
     int sucess=0;
-    if (role==LlTx){ // SE EU FOR TRASNMISSOE
+    if (role==LlTx){ //se for o transmissor
         if(send_and_wait(CONTROL_DISC,CONTROL_DISC)==-1)return -1;
         sendSFrame(CONTROL_UA);
 
-    }else if(role==LlRx){ // SE EU FOR RECETOR
+    }else if(role==LlRx){ //se for o recetor
             if(only_wait(CONTROL_DISC)==-1) return -1;
             if(send_and_wait(CONTROL_DISC,CONTROL_UA)==-1) return -1;
     }
@@ -456,13 +463,4 @@ int llclose(int showStatistics)
     return clstat;
 }
 
-int sendSFrame(unsigned int control){
-    unsigned char buf[5] = {0};
-    buf[0] = FLAG;
-    buf[1] = ADDRESS_T;
-    buf[2] = control;
-    buf[3] = buf[1] ^ buf[2];
-    buf[4] = FLAG;
 
-    return writeBytes((const unsigned char *)buf, 5);
-}
