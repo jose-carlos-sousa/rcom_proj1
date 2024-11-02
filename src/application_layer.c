@@ -8,23 +8,18 @@
 
 
 
-static enum state recvState = APPLICATION_START;
-static props mypros = {0, "", 0, 0, 0};
+enum state recvState = APPLICATION_START;
+props mypros = {0, "", 0, 0, 0};
 
-int framesSent = 0;
-int framesRead = 0;
-int originalSize = 0;
-int newSize = 0;
-int fileSize = 0;
+int framesSent = 0, framesRead = 0, originalSize = 0, newSize = 0, fileSize = 0;
+int totalAlarms = 0, totalRejs = 0, totalRRs = 0, totalDups = 0;
+
 struct timeval programStart, programEnd;
-int totalAlarms = 0;
-int totalRejs = 0;
-int totalRRs = 0;
-int totalDups = 0;
+
 
 
 // Função para dar handle a erros fatais
-static void handleFatalError(const char *msg, FILE *file, int closeLinkLayer) {
+void handleFatalError(const char *msg, FILE *file, int closeLinkLayer) {
     if (file) {
         fclose(file);
     }
