@@ -10,6 +10,16 @@
 #define T_FILESIZE 0
 #define T_FILENAME 1
 #define MAX_PACKET_SIZE (MAX_PAYLOAD_SIZE + 6)
+#define MAX_FILE_NAME 50
+
+typedef struct {
+    unsigned int file_size;
+    char file_name[MAX_FILE_NAME];
+    unsigned int bytesRead;
+    unsigned char sequence_number;
+    unsigned char expected_sequence_number; 
+} props;
+
 enum state {
     APPLICATION_START,
     APPLICATION_DATA,
