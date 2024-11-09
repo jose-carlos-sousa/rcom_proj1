@@ -16,6 +16,8 @@
 #define ESCAPE 0x7D
 #define MOD_FLAG 0x5e
 #define MOD_ESCAPE 0x5d
+#define BCC1_ERROR_LIKELYHOOD 0
+#define BCC2_ERROR_LIKELYHOOD 0
 
 #include <fcntl.h>
 #include <stdio.h>

@@ -15,7 +15,7 @@ int lastSeqNumber = -1;
 int time_out=0;
 int retraNum=0;
 int role=0;
-
+unsigned int baudRate =0;
 extern int framesSent;
 extern int framesRead;
 extern int originalSize;
@@ -26,6 +26,25 @@ extern int totalAlarms;
 extern int totalRejs;
 extern int totalRRs;
 extern int totalDups;
+
+void injectErrorBCC1(unsigned int * bcc1){
+    unsigned int randomNum = rand() % 100;
+    if(randomNum <= BCC1_ERROR_LIKELYHOOD)
+    {
+        *bcc1 =*bcc1-1;
+    }
+    
+
+}
+void injectErrorBCC2(unsigned int * bcc2){
+    unsigned int randomNum = rand() % 100;
+    if(randomNum <= BCC2_ERROR_LIKELYHOOD)
+    {
+        *bcc2 =*bcc2-1;
+    }
+    
+
+}
 
 int sendSFrame(unsigned int control){
     unsigned char buf[5] = {0};
@@ -164,6 +183,7 @@ int llopen(LinkLayer connectionParameters)
     retraNum = connectionParameters.nRetransmissions;
     time_out = connectionParameters.timeout;
     role=connectionParameters.role;
+    baudRate = connectionParameters.baudRate;
     if(connectionParameters.role ==LlTx){
         if(send_and_wait(CONTROL_SET, CONTROL_UA)==-1)return -1;
     }
@@ -350,7 +370,9 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
                     break;
 
                 case C_RCV:
-                    if (c == (ADDRESS_T ^ control)) {
+                    unsigned int bcc1 = ( ADDRESS_T ^ control );
+                    injectErrorBCC1(&bcc1);
+                    if (c == (bcc1)) {
                         state = READING_DATA;
                     } else if (c == FLAG) {
                         state = FLAG_RCV;
@@ -370,6 +392,7 @@ int llread(unsigned char *packet) // TO CHANGE IN THE FUTURE
 
                         for (unsigned int j = 1; j < i; j++)
                             acc ^= packet[j];
+                        injectErrorBCC2(&acc);
                         if (bcc2 == acc) {
                             state = STOP_STATE;
                             if (sendSFrame(nr ? CONTROL_RR1 : CONTROL_RR0)) printf("Sent RR response\n");
@@ -461,6 +484,9 @@ int llclose(int showStatistics)
 
         double elapsed_time = (programEnd.tv_sec - programStart.tv_sec) + (programEnd.tv_usec - programStart.tv_usec) / 1e6;
         printf("Total time: %g seconds\n", elapsed_time);
+        printf ("bits per second :   %.2f\n",(fileSize * 8) / elapsed_time);
+        double efficiency = ((fileSize * 8) / elapsed_time) / baudRate * 100;
+        printf("Transmission efficiency: %.2f%%\n", efficiency);
     }
 
     return clstat;
